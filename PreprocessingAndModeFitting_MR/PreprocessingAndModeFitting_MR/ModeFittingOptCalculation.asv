@@ -1,0 +1,61 @@
+% Test Optimization Modal Fitting
+%
+% Mark Rau
+% May 2024
+%
+% The mode fitting works with three optimization steps. 
+% First, peak picking is done to find the most prominent frequency peaks.
+% Then the frequency, damping ratios, and amplitude of each mode is fit
+% individually.
+% Secondly, an optimization is done on all modes, but just on the
+% amplitudes, do get a better amplitude guess taking into account the the mode interactions. 
+% Finally, an optimization is done on all mode frequencies, damping ratios,
+% and amplitudes to get a slightly better fit. 
+%
+
+close all
+clear all
+clc
+
+%% Load and get an IR
+
+% Load an example ir
+load('guitarAdmitt.mat')
+
+fs = 48000;
+N = fs;
+plotBool=1;
+dur = 1;
+
+GuitarAdmitt = fft(guitarAdmitt(1:N));
+
+
+% Mode fitting
+tic
+[fmhat, drhat, gmhat, irhat] = ModeFittingGuitarOpt(guitarAdmitt,fs,dur);
+toc
+
+
+% Plot results
+if(plotBool==1)
+    f = (0:N-1)*fs/N;
+    figure
+    dur = 1;
+    [irhat, t] = modalIr(fmhat,drhat,gmhat,fs,dur);
+
+    semilogx(f,20*log10(abs(GuitarAdmitt)),"LineWidth",2);
+    hold on;
+    semilogx(f,20*log10(abs(fft(irhat))),"LineWidth",2);
+    title('Mode Fitting: Guitar')
+    xlim([50,1000])
+    ylim([-100,0])
+    xlabel('Frequency (Hz)')
+    ylabel('Admittance (dB) (m s^{-1} N^{-1})')
+    grid on
+    set(gcf, 'Color', 'w');
+    set(gcf, 'Position', [300 100 1200 600]);
+    legend('Measurement','Fit')
+end
+
+
+
