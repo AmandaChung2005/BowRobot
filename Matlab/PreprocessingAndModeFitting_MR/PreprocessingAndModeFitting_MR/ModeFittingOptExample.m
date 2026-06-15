@@ -23,19 +23,21 @@ data= load('guitarAdmitt.mat');
 data1= load('CarbonFiberFromBenoit1_clamped_meas1');
 
 % signal= data.guitarAdmitt;
-signal=data1.indata(:,2);
+signal= data1.indata(:,2);
+
 %%
-fs = length(signal);
+fs = 48000;
 N = fs;
 plotBool=1;
 dur = 1;
 
-signal_fft = fft(signal(1:N));
+signalPadded= [signal; zeros(fs-length(signal),1)];
+signal_fft = fft(signalPadded(1:N));
 
 
 % Mode fitting
 tic
-[fmhat, drhat, gmhat, irhat] = ModeFittingOpt(signal,fs,dur);
+[fmhat, drhat, gmhat, irhat] = ModeFittingOpt(signalPadded,fs,dur);
 toc
 
 
@@ -47,8 +49,18 @@ if(plotBool==1)
     dur = 1;
     [irhat, t] = modalIr(fmhat,drhat,gmhat,fs,dur);
 
+   
+
+
+
+
     semilogx(f,20*log10(abs(signal_fft)),"LineWidth",2);
-    hold on;
+    hold on
+
+    for k=1:length(fmhat)
+        xline(fmhat(k),'r--')
+    end
+
     semilogx(f,20*log10(abs(fft(irhat))),"LineWidth",2);
     title('Mode Fitting')
     xlim auto
@@ -59,6 +71,13 @@ if(plotBool==1)
     set(gcf, 'Color', 'w');
     set(gcf, 'Position', [300 100 1200 600]);
     legend('Measurement','Fit')
+
+   disp([fmhat gmhat])
+
+   figure
+stem(fmhat,gmhat)
+xlabel('Frequency (Hz)')
+ylabel('Modal amplitude')
 end
 
 
