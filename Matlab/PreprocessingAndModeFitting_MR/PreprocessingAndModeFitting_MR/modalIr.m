@@ -12,4 +12,4 @@ function [ir,t] = modalIr(freq,damp,amp,fs,dur)
 
     ir = real(basis'*amp);
 
-end
+end  

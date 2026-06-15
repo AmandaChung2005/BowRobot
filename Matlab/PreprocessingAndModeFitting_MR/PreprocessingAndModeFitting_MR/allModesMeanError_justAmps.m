@@ -1,4 +1,4 @@
-function [error] = allModesModeMeanError_justAmps(x,freqs, dr , tf_dB, fs ,freqLimits)
+function [error] = allModesMMeanError_justAmps(x,freqs, dr , tf_dB, fs ,freqLimits)
 % Calculate the mean square error with the frequency band scaling
 %
 

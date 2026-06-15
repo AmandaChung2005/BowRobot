@@ -1,4 +1,4 @@
-function [fmhat, drhat, gmhat, irhat] = ModeFittingGuitarOpt(ir,fs,dur)
+function [fmhat, drhat, gmhat, irhat] = ModeFittingOpt(ir,fs,dur)
 % May 2024
 % Mark Rau
 %
@@ -17,9 +17,9 @@ Admitt = fft(ir(1:N));
 % freqLimsMid = [160:300];
 % freqLimsHigh = [300:1000];
 
-freqLimsLow = [100:300];
-freqLimsMid = [300:500];
-freqLimsHigh = [500:1500];
+freqLimsLow = [500:700];
+freqLimsMid = [700:1500];
+freqLimsHigh = [1500:2000];
 
 Admitt_dB = 20*log10(abs(Admitt));
 
@@ -27,7 +27,7 @@ Admitt_dB = 20*log10(abs(Admitt));
 % [peaksMid,idxMid] = findpeaks(Admitt_dB(freqLimsMid),'MinPeakHeight',-50,'MinPeakDistance',5,'MinPeakProminence',5);
 % [peaksHigh,idxHigh] = findpeaks(Admitt_dB(freqLimsHigh),'MinPeakHeight',-60,'MinPeakDistance',2,'MinPeakProminence',2);
 
-[peaksLow,idxLow] = findpeaks(Admitt_dB(freqLimsLow),'MinPeakHeight',-30,'MinPeakDistance',0.5,'MinPeakProminence',0.5);
+[peaksLow,idxLow] = findpeaks(Admitt_dB(freqLimsLow),'MinPeakHeight',-30, 'MinPeakDistance', 2, 'MinPeakProminence', 2);
 [peaksMid,idxMid] = findpeaks(Admitt_dB(freqLimsMid),'MinPeakHeight',-30,'MinPeakDistance',2,'MinPeakProminence',2);
 [peaksHigh,idxHigh] = findpeaks(Admitt_dB(freqLimsHigh),'MinPeakHeight',-30,'MinPeakDistance',2,'MinPeakProminence',2);
 
@@ -37,9 +37,8 @@ peakAmps = 10.^([peaksLow; peaksMid; peaksHigh]/20);
 numModes = length(peakFreqs);
 freqs_g1 = peakFreqs;
 dr_g1 = 0.01*ones(numModes,1);
-amps_g1 = peakAmps.*ones(numModes,1)/1000;
-
-disp(sort(peakFreqs))
+% amps_g1 = peakAmps.*ones(numModes,1)/1000;
+amps_g1 = 2*peakAmps;
 
 
 %% First optimiziation, individual modes
@@ -75,21 +74,18 @@ for k = 1:numModes
 end
 
 
-
-
-
 %% Second Optimization, all modes, just amplitudes
 x0 = amps_g2; % Need to make the variables as a vector for the optimization
 
 % Define a function which returns the error at the current "solution"
 % freqLimits = [75,1000];
-freqLimits = [75,1000];
+freqLimits = [75,5000];
 fun = @(x)allModesMeanError_justAmps(x, freqs_g2, dr_g2, Admitt_dB, fs ,freqLimits);
 
 % lower bounds for the variables. This is a constrained optimization, so
 % you can set upper and lower bounds for each variable.
 lb = zeros(length(amps_g2),1);
-% ub = [freqs_g1(k)+1,0.1,1];
+ub = [freqs_g1(k)+1,0.1,1];
 
 % Options for the optimization, you could change these and test different
 % things if you want
@@ -101,6 +97,7 @@ options = optimoptions('fmincon', 'OptimalityTolerance', 1e-10, 'MaxIterations',
 freqs_g3 = freqs_g2;
 dr_g3 = dr_g2;
 amps_g3 = x;
+
 
 %% Third Optimization, all modes, all params
 x0 = [freqs_g3, dr_g3, amps_g3]; % Need to make the variables as a vector for the optimization
@@ -127,9 +124,6 @@ dr_g4 = x(:,2);
 amps_g4 = x(:,3);
 
 
-
-
-
 fmhat = freqs_g4;
 drhat = dr_g4;
 gmhat = amps_g4;
@@ -137,7 +131,7 @@ gmhat = amps_g4;
 [irhat4, t] = modalIr(freqs_g4,dr_g4,amps_g4,fs,dur);
 irhat = irhat4;
 
-%%
+%% Debugging
 disp('peakFreqs')
 disp(sort(peakFreqs))
 
@@ -149,4 +143,6 @@ disp(sort(freqs_g3))
 
 disp('fmhat')
 disp(sort(fmhat))
+
+
 end
