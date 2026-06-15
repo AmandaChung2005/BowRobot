@@ -18,9 +18,6 @@ clear all
 clc
 
 %% Load and get an IR
-addpath("C:\Users\amand\Documents\UROP Summer '26\Matlab\Data\Acoustic Hammer\CarbonFiberFromBenoit1");
-
-
 % Load an example ir
 data= load('guitarAdmitt.mat');
 data1= load('CarbonFiberFromBenoit1_clamped_meas1');
