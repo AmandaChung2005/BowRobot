@@ -26,34 +26,39 @@ data1= load('CarbonFiberFromBenoit1_clamped_meas1');
 signal= data1.indata(:,2);
 
 %%
-fs = 48000;
-N = fs;
+fs = 4800;
+N = length(signal);
 plotBool=1;
-dur = 1;
+dur = N/fs;
 
-signalPadded= [signal; zeros(fs-length(signal),1)];
-signal_fft = fft(signalPadded(1:N));
+signal_fft= fft(signal(1:N));
+
+% signalPadded= [signal; zeros(fs-length(signal),1)];
+% signal_fft = fft(signalPadded(1:N));
 
 
 % Mode fitting
 tic
-[fmhat, drhat, gmhat, irhat] = ModeFittingOpt(signalPadded,fs,dur);
+[fmhat, drhat, gmhat, irhat] = ModeFittingOpt(signal,fs,dur);
+% [fmhat, drhat, gmhat, irhat] = ModeFittingOpt(signalPadded,fs,dur);
 toc
 
 
 % Plot results
-
 if(plotBool==1)
     f = (0:N-1)*fs/N;
     figure
-    dur = 1;
+    dur = N/fs;
     [irhat, t] = modalIr(fmhat,drhat,gmhat,fs,dur);
 
    
+   hold on
+   plot(f,20*log10(abs(signal_fft)))
+   hold off
 
 
 
-
+figure
     semilogx(f,20*log10(abs(signal_fft)),"LineWidth",2);
     hold on
 
@@ -79,6 +84,4 @@ stem(fmhat,gmhat)
 xlabel('Frequency (Hz)')
 ylabel('Modal amplitude')
 end
-
-
 

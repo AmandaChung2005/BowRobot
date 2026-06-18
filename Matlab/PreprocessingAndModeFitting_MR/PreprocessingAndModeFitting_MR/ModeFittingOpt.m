@@ -79,7 +79,7 @@ x0 = amps_g2; % Need to make the variables as a vector for the optimization
 
 % Define a function which returns the error at the current "solution"
 % freqLimits = [75,1000];
-freqLimits = [75,5000];
+freqLimits = [75,4000];
 fun = @(x)allModesMeanError_justAmps(x, freqs_g2, dr_g2, Admitt_dB, fs ,freqLimits);
 
 % lower bounds for the variables. This is a constrained optimization, so
