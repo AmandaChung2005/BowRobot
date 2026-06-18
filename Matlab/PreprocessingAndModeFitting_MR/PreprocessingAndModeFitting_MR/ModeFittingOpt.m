@@ -19,8 +19,8 @@ f = (0:N-1)*fs/N;
 % freqLimsMid = [160:300];
 % freqLimsHigh = [300:1000];
 
-freqLimsLow  = find(f >= 40  & f <= 60);
-freqLimsMid  = find(f >= 60  & f <= 100);
+freqLimsLow  = find(f >= 40  & f <= 80);
+freqLimsMid  = find(f >= 60  & f <= 110);
 freqLimsHigh = find(f >= 100 & f <= 300);
 
 Admitt_dB = 20*log10(abs(Admitt));
@@ -29,9 +29,9 @@ Admitt_dB = 20*log10(abs(Admitt));
 % [peaksMid,idxMid] = findpeaks(Admitt_dB(freqLimsMid),'MinPeakHeight',-50,'MinPeakDistance',5,'MinPeakProminence',5);
 % [peaksHigh,idxHigh] = findpeaks(Admitt_dB(freqLimsHigh),'MinPeakHeight',-60,'MinPeakDistance',2,'MinPeakProminence',2);
 
-[peaksLow,idxLow] = findpeaks(Admitt_dB(freqLimsLow),'MinPeakHeight',-50, 'MinPeakDistance', 2, 'MinPeakProminence', 2);
-[peaksMid,idxMid] = findpeaks(Admitt_dB(freqLimsMid),'MinPeakHeight',-40,'MinPeakDistance', 2,'MinPeakProminence', 2);
-[peaksHigh,idxHigh] = findpeaks(Admitt_dB(freqLimsHigh),'MinPeakHeight',-40,'MinPeakDistance', 2,'MinPeakProminence', 2);
+[peaksLow,idxLow] = findpeaks(Admitt_dB(freqLimsLow),'MinPeakHeight',-30, 'MinPeakDistance', 5, 'MinPeakProminence', 5);
+[peaksMid,idxMid] = findpeaks(Admitt_dB(freqLimsMid),'MinPeakHeight',-30,'MinPeakDistance', 5,'MinPeakProminence', 5);
+[peaksHigh,idxHigh] = findpeaks(Admitt_dB(freqLimsHigh),'MinPeakHeight',-30,'MinPeakDistance', 5,'MinPeakProminence', 5);
 
 peakBins = [idxLow+freqLimsLow(1)-2; idxMid+freqLimsMid(1)-2; idxHigh+freqLimsHigh(1)-2];
 peakFreqs = (peakBins-1)*fs/N;
