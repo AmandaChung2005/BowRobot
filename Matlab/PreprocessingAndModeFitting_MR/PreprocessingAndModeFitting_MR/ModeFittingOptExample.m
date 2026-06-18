@@ -52,13 +52,6 @@ if(plotBool==1)
     [irhat, t] = modalIr(fmhat,drhat,gmhat,fs,dur);
 
    
-   hold on
-   plot(f,20*log10(abs(signal_fft)))
-   hold off
-
-
-
-figure
     semilogx(f,20*log10(abs(signal_fft)),"LineWidth",2);
     hold on
 
