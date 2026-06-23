@@ -42,7 +42,7 @@ numModes = length(peakFreqs);
 freqs_g1 = peakFreqs;
 dr_g1 = 0.01*ones(numModes,1);
 % amps_g1 = peakAmps.*ones(numModes,1)/1000;
-amps_g1 = 2*peakAmps;
+amps_g1 = peakAmps;
 
 
 %% First optimiziation, individual modes
@@ -61,13 +61,16 @@ for k = 1:numModes
     
     % lower bounds for the variables. This is a constrained optimization, so
     % you can set upper and lower bounds for each variable.
-    lb = [freqs_g1(k)-3,0.001,0];
-    ub = [freqs_g1(k)+3,0.1,1];
+    % lb = [freqs_g1(k)-3,0.001,0];
+    % ub = [freqs_g1(k)+3,0.1,1];
+    lb = [freqs_g1(k)-1,0.001,0.25*amps_g1(k)];
+    ub = [freqs_g1(k)+1,0.05,4*amps_g1(k)];
     
     % Options for the optimization, you could change these and test different
     % things if you want
-    options = optimoptions('fmincon', 'OptimalityTolerance', 1e-10, 'MaxIterations', 5e3, 'MaxFunctionEvaluations', 5e4, 'StepTolerance',1e-100,'Display', 'off');
-    
+    % options = optimoptions('fmincon', 'OptimalityTolerance', 1e-10, 'MaxIterations', 5e3, 'MaxFunctionEvaluations', 5e4, 'StepTolerance',1e-100,'Display', 'off');
+    options = optimoptions('fmincon', 'OptimalityTolerance', 1e-10, 'MaxIterations', 5e2, 'MaxFunctionEvaluations', 5e4, 'StepTolerance',1e-10,'Display', 'off');
+
     % Run the optimiuzation here
     [x,fval,exitflag,output] = fmincon(fun,x0,[],[],[],[],lb,ub,[], options);
 
@@ -77,6 +80,11 @@ for k = 1:numModes
 
 end
 
+figure
+stem(freqs_g2,amps_g2)
+xlabel('Frequency (Hz)')
+ylabel('Modal amplitude')
+title('1st Optimization')
 
 %% Second Optimization, all modes, just amplitudes
 x0 = amps_g2; % Need to make the variables as a vector for the optimization
@@ -88,20 +96,27 @@ fun = @(x)allModesMeanError_justAmps(x, freqs_g2, dr_g2, Admitt_dB, fs ,freqLimi
 
 % lower bounds for the variables. This is a constrained optimization, so
 % you can set upper and lower bounds for each variable.
-lb = zeros(length(amps_g2),1);
-ub = [freqs_g1(k)+1,0.1,1];
+% lb = zeros(length(amps_g2),1);
+% ub = [freqs_g1(k)+1,0.1,1];
+lb= 0.25*amps_g2;
+ub= 4.0*amps_g2;
 
 % Options for the optimization, you could change these and test different
 % things if you want
 options = optimoptions('fmincon', 'OptimalityTolerance', 1e-10, 'MaxIterations', 5e3, 'MaxFunctionEvaluations', 5e4, 'StepTolerance',1e-100,'Display', 'off');
 
 % Run the optimiuzation here
-[x,fval,exitflag,output] = fmincon(fun,x0,[],[],[],[],lb,[],[], options);
+[x,fval,exitflag,output] = fmincon(fun,x0,[],[],[],[],lb,ub,[], options);
 
 freqs_g3 = freqs_g2;
 dr_g3 = dr_g2;
 amps_g3 = x;
 
+figure
+stem(freqs_g3,amps_g3)
+xlabel('Frequency (Hz)')
+ylabel('Modal amplitude')
+title('2nd Optimization')
 
 %% Third Optimization, all modes, all params
 x0 = [freqs_g3, dr_g3, amps_g3]; % Need to make the variables as a vector for the optimization
@@ -113,8 +128,8 @@ fun = @(x)allModesMeanError_allParams(x, Admitt_dB, fs ,freqLimits);
 
 % lower bounds for the variables. This is a constrained optimization, so
 % you can set upper and lower bounds for each variable.
-lb = [x0(:,1)-2, 0.5.*x0(:,2) ,0.*x0(:,3)];
-ub = [x0(:,1)+2, 2.*x0(:,2) ,2.*x0(:,3)];
+lb = [x0(:,1)-1, 0.5.*x0(:,2) ,0.1*x0(:,3)];
+ub = [x0(:,1)+1, 2.*x0(:,2) ,3.*x0(:,3)];
 
 % Options for the optimization, you could change these and test different
 % things if you want
@@ -135,18 +150,28 @@ gmhat = amps_g4;
 [irhat4, t] = modalIr(freqs_g4,dr_g4,amps_g4,fs,dur);
 irhat = irhat4;
 
+
 %% Debugging
-disp('peakFreqs')
-disp(sort(peakFreqs))
-
-disp('freqs_g2')
-disp(sort(freqs_g2))
-
-disp('freqs_g3')
-disp(sort(freqs_g3))
-
-disp('fmhat')
-disp(sort(fmhat))
+% disp('peakFreqs')
+% disp(sort(peakFreqs))
+% 
+% disp('freqs_g2')
+% disp(sort(freqs_g2))
+% 
+% disp('freqs_g3')
+% disp(sort(freqs_g3))
+% 
+% disp('fmhat')
+% disp(sort(fmhat))
+% 
+% disp('Initial amplitudes')
+% disp(amps_g1)
+% 
+% disp('Optimized amplitudes')
+% disp(amps_g2)
+% 
+% disp(peakFreqs)
+% disp([peaksLow; peaksMid; peaksHigh])
 
 
 end

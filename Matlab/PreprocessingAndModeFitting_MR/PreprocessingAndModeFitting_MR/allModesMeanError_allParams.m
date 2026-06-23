@@ -33,6 +33,26 @@ function [error] = allModesMeanError_allParams(x, tf_dB, fs ,freqLimits)
     errorFreqPeaks = mean(abs(tf_dB(round(freqs+1)) - H_dB(round(freqs+1))));
     errorMean = mean(abs(tf_dB(errorFreqLimitsIndex(1):errorFreqLimitsIndex(2)) - H_dB(errorFreqLimitsIndex(1):errorFreqLimitsIndex(2))));
 
-    error = errorMean + 10*errorFreqPeaks;
+   
 
+    % Peak matching error
+    df= fs/N;
+    freqBins= round(freqs./df)+1;
+    peakError= 0;
+
+    for k=1:length(freqBins)
+        idx= max(1, freqBins(k)-3):min(N, freqBins(k)+3);
+        peakError= peakError+mean(abs(tf_dB(idx)-H_dB(idx)));
+    end
+
+    peakError= peakError/length(freqBins);
+
+    % Total Error
+    error = errorMean + 100*errorFreqPeaks;
+
+    disp('Measured peak heights')
+disp(tf_dB(freqBins))
+
+disp('Model peak heights')
+disp(H_dB(freqBins))
 end

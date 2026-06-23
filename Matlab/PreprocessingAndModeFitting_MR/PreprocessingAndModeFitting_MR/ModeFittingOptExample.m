@@ -20,7 +20,7 @@ clc
 %% Load and get an IR
 % Load an example ir
 data= load('guitarAdmitt.mat');
-data1= load('CarbonFiberFromBenoit1_clamped_meas1');
+data1= load('CarbonFiberFromBenoit1_clamped_meas1.mat');
 
 % signal= data.guitarAdmitt;
 signal= data1.indata(:,2);
@@ -72,9 +72,12 @@ if(plotBool==1)
 
    disp([fmhat gmhat])
 
-   figure
-stem(fmhat,gmhat)
-xlabel('Frequency (Hz)')
-ylabel('Modal amplitude')
+
+
+    figure
+    stem(fmhat,gmhat)
+    xlabel('Frequency (Hz)')
+    ylabel('Modal amplitude')
+    title('3rd Optimization')
 end
 
