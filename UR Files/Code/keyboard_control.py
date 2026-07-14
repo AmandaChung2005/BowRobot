@@ -7,26 +7,35 @@ from scipy.spatial.transform import Rotation
 from rtde_control import RTDEControlInterface
 import config
 
+commands = {
+    "start": False, # Starts Program
+    "halt": False   # Ends Program
+}
+
 directions = {
-    "w": False,     # Forward
-    "a": False,     # Left
-    "s": False,     # Down
-    "d": False,     # Right
-    "q": False,     # Up
-    "e": False,     # Down
-    "halt": False,  # Ends Program
-    "start": False  # Starts Program
+    "w": False,  # +Y
+    "a": False,  # +X
+    "s": False,  # -Y
+    "d": False,  # -X
+    "q": False,  # +Z
+    "e": False,  # -Z
+    "i": False,  # +Roll
+    "j": False,  # +Pitch
+    "k": False,  # -Roll
+    "l": False,  # -Pitch
+    "u": False,  # +Yaw
+    "o": False   # -Yaw
 }
 
 def pressed(key):
     global gripperstate
-    if key == Key.enter:   # Stops lisetener
-        directions["start"] = True
+    if key == Key.enter:   # Starts listener
+        commands["start"] = True
         print("Program starting...")
         return
 
     if key == Key.delete:   # Stops lisetener
-        directions["halt"] = True
+        commands["halt"] = True
         return False
     
     try:
@@ -57,19 +66,60 @@ with Listener(on_press = pressed, on_release = released) as listener:
 
     if config.rtde_c.isConnected():
         print("Robot Connection Successful!")
+        print ("Press ENTER to start")
+        print ("Press DELETE to stop")
     else:
-        print ("Robot Connection Not Working")
+        print ("Robot Connection Not Working, Try Again")
         config.rtde_c.stopScript()
 
-print ("Press ENTER to start")
-print ("Press DELETE to stop")
 
-while not directions["start"]:
-    if directions["halt"]:
+# Force Mode Parameters
+limits = [2, 2, 2, 1, 1, 1]
+
+force_commands = {
+    "a": (0, 10),   # +X
+    "d": (0, -10),  # -X
+    "w": (1, 10),   # +Y
+    "s": (1, -10),  # -Y
+    "q": (2, 10),   # +Z
+    "e": (2, -10),  # -Z
+    "i": (3, 2),   # +Roll
+    "k": (3, -2),  # -Roll
+    "j": (4, 2),   # +Pitch
+    "l": (4, -2),  # -Pitch
+    "u": (5, 2),   # +Yaw
+    "o": (5, -2)   # -Yaw
+}
+
+# Force Control
+while not commands["start"]:
+    if commands["halt"]:
         break
     time.sleep(0.01)
 
-while not directions["halt"]:
-    if directions["start"]:
-        
-    
+while not commands["halt"]:
+    t_start = config.rtde_c.initPeriod()
+
+    if not any(directions.values()):
+         config.rtde_c.forceModeStop()
+
+    else:
+        selection_vector = [0, 0, 0, 0, 0, 0]
+        wrench = [0, 0, 0, 0, 0, 0]
+
+        for key, (axis, force) in force_commands.items():
+            if directions[key]:
+                selection_vector[axis] = 1
+                wrench[axis] += force
+
+        config.rtde_c.forceMode(
+            config.task_frames[config.current_string],
+            selection_vector,
+            wrench,
+            config.force_type,
+            limits
+        )
+
+    config.rtde_c.waitPeriod(t_start)
+
+config.rtde_c.forceModeStop()
