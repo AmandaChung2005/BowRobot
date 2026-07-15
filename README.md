@@ -70,7 +70,7 @@ How to commit and push changes to the remote repository
  ```bash
  cd path/to/BowRobot
  git add .
- git commit -m 'describe your change'
+ git commit -m "describe your change"
  git push origin <branch-name>
  ```
 
