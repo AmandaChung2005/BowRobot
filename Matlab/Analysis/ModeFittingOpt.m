@@ -38,9 +38,9 @@ peakFreqs = (peakBins-1)*fs/N;
 
 peakAmps = 10.^([peaksLow; peaksMid; peaksHigh]/20);
 
-numModes = length(peakFreqs);
+numModes = length(peakFreqs);     % # of detected modes
 freqs_g1 = peakFreqs;
-dr_g1 = 0.01*ones(numModes,1);
+dr_g1 = 0.01*ones(numModes,1);     % initial damping ratio
 % amps_g1 = peakAmps.*ones(numModes,1)/1000;
 amps_g1 = peakAmps;
 
@@ -50,7 +50,7 @@ freqs_g2 = zeros(numModes,1);
 dr_g2 = zeros(numModes,1);
 amps_g2 = zeros(numModes,1);
 
-modeWidth = 5;
+modeWidth = 2;
 
 for k = 1:numModes
 
@@ -74,9 +74,9 @@ for k = 1:numModes
     % Run the optimiuzation here
     [x,fval,exitflag,output] = fmincon(fun,x0,[],[],[],[],lb,ub,[], options);
 
-    freqs_g2(k) = x(1);
-    dr_g2(k) = x(2);
-    amps_g2(k) = x(3);
+    freqs_g2(k) = x(1)
+    dr_g2(k) = x(2)
+    amps_g2(k) = x(3)
 
 end
 
@@ -85,7 +85,7 @@ stem(freqs_g2,amps_g2)
 xlabel('Frequency (Hz)')
 ylabel('Modal amplitude')
 title('1st Optimization')
-
+disp(dr_g2)
 %% Second Optimization, all modes, just amplitudes
 x0 = amps_g2; % Need to make the variables as a vector for the optimization
 
@@ -117,6 +117,7 @@ stem(freqs_g3,amps_g3)
 xlabel('Frequency (Hz)')
 ylabel('Modal amplitude')
 title('2nd Optimization')
+disp(dr_g3)
 
 %% Third Optimization, all modes, all params
 x0 = [freqs_g3, dr_g3, amps_g3]; % Need to make the variables as a vector for the optimization
@@ -150,7 +151,7 @@ gmhat = amps_g4;
 [irhat4, t] = modalIr(freqs_g4,dr_g4,amps_g4,fs,dur);
 irhat = irhat4;
 
-
+disp(table(freqs_g1, fmhat, dr_g4, amps_g4))
 %% Debugging
 % disp('peakFreqs')
 % disp(sort(peakFreqs))

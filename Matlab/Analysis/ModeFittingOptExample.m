@@ -33,9 +33,6 @@ dur = N/fs;
 
 signal_fft= fft(signal(1:N));
 
-% signalPadded= [signal; zeros(fs-length(signal),1)];
-% signal_fft = fft(signalPadded(1:N));
-
 
 % Mode fitting
 tic
@@ -80,4 +77,5 @@ if(plotBool==1)
     ylabel('Modal amplitude')
     title('3rd Optimization')
 end
+
 

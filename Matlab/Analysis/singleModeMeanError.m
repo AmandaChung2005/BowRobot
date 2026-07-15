@@ -19,6 +19,11 @@ function [error] = singleModeMeanError(x, tf_dB, fs ,modeWidth)
     [irhat, t] = modalIr(freq,dr,amp,fs,dur);
                              
     H_dB = 20*log10(abs(fft(irhat)));
+
+    figure
+plot(tf_dB)
+hold on
+plot(H_dB)
     
     % Convert frequency (Hz) to FFT bin index
     df = fs/N;

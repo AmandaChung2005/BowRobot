@@ -24,21 +24,27 @@ function [error] = allModesMeanError_allParams(x, tf_dB, fs ,freqLimits)
     % Get the frequency limit indices
     errorFreqLimitsIndex = round(N*freqLimits/fs);
 
+    % % Peak matching error
+    % df= fs/N;
+    % freqBins= round(freqs./df)+1;
+    % peakError= 0;
+
 
     % Error metric is the mean absolute error difference, you could to
     % change this to try other error metrics
-%     error = mean(abs(tf_dB(errorFreqLimitsIndex(1):errorFreqLimitsIndex(2)) - H_dB(errorFreqLimitsIndex(1):errorFreqLimitsIndex(2))));
+    % error = mean(abs(tf_dB(errorFreqLimitsIndex(1):errorFreqLimitsIndex(2)) - H_dB(errorFreqLimitsIndex(1):errorFreqLimitsIndex(2))));
 
     % Try to weight the error metric
-    errorFreqPeaks = mean(abs(tf_dB(round(freqs+1)) - H_dB(round(freqs+1))));
+    % errorFreqPeaks = mean(abs(tf_dB(round(freqs+1)) - H_dB(round(freqs+1))));
+    % errorFreqPeaks = mean(abs(tf_dB(freqBins) - H_dB(freqBins)));
     errorMean = mean(abs(tf_dB(errorFreqLimitsIndex(1):errorFreqLimitsIndex(2)) - H_dB(errorFreqLimitsIndex(1):errorFreqLimitsIndex(2))));
-
-   
-
+    
     % Peak matching error
     df= fs/N;
     freqBins= round(freqs./df)+1;
     peakError= 0;
+
+  
 
     for k=1:length(freqBins)
         idx= max(1, freqBins(k)-3):min(N, freqBins(k)+3);
@@ -48,11 +54,12 @@ function [error] = allModesMeanError_allParams(x, tf_dB, fs ,freqLimits)
     peakError= peakError/length(freqBins);
 
     % Total Error
-    error = errorMean + 100*errorFreqPeaks;
+    % error = errorMean + 100*errorFreqPeaks;
+    error = errorMean + 20*peakError;
 
-    disp('Measured peak heights')
-disp(tf_dB(freqBins))
-
-disp('Model peak heights')
-disp(H_dB(freqBins))
+%     disp('Measured peak heights')
+% disp(tf_dB(freqBins))
+% 
+% disp('Model peak heights')
+% disp(H_dB(freqBins))
 end
