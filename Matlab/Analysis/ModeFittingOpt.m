@@ -19,7 +19,7 @@ f = (0:N-1)*fs/N;
 % freqLimsMid = [160:300];
 % freqLimsHigh = [300:1000];
 
-freqLimsLow  = find(f >= 40  & f <= 80);
+freqLimsLow  = find(f >= 40  & f <= 90);
 freqLimsMid  = find(f >= 60  & f <= 110);
 freqLimsHigh = find(f >= 100 & f <= 300);
 
@@ -29,11 +29,11 @@ Admitt_dB = 20*log10(abs(Admitt));
 % [peaksMid,idxMid] = findpeaks(Admitt_dB(freqLimsMid),'MinPeakHeight',-50,'MinPeakDistance',5,'MinPeakProminence',5);
 % [peaksHigh,idxHigh] = findpeaks(Admitt_dB(freqLimsHigh),'MinPeakHeight',-60,'MinPeakDistance',2,'MinPeakProminence',2);
 
-[peaksLow,idxLow] = findpeaks(Admitt_dB(freqLimsLow),'MinPeakHeight',-30, 'MinPeakDistance', 5, 'MinPeakProminence', 5);
-[peaksMid,idxMid] = findpeaks(Admitt_dB(freqLimsMid),'MinPeakHeight',-30,'MinPeakDistance', 5,'MinPeakProminence', 5);
-[peaksHigh,idxHigh] = findpeaks(Admitt_dB(freqLimsHigh),'MinPeakHeight',-30,'MinPeakDistance', 5,'MinPeakProminence', 5);
+[peaksLow,idxLow] = findpeaks(Admitt_dB(freqLimsLow),'MinPeakHeight',-13, 'MinPeakDistance', 10, 'MinPeakProminence', 5);
+[peaksMid,idxMid] = findpeaks(Admitt_dB(freqLimsMid),'MinPeakHeight',-13,'MinPeakDistance', 10,'MinPeakProminence', 5);
+[peaksHigh,idxHigh] = findpeaks(Admitt_dB(freqLimsHigh),'MinPeakHeight',-13,'MinPeakDistance', 10,'MinPeakProminence', 5);
 
-peakBins = [idxLow+freqLimsLow(1)-2; idxMid+freqLimsMid(1)-2; idxHigh+freqLimsHigh(1)-2];
+peakBins = [idxLow+freqLimsLow(1)-1; idxMid+freqLimsMid(1)-1; idxHigh+freqLimsHigh(1)-2];
 peakFreqs = (peakBins-1)*fs/N;
 
 peakAmps = 10.^([peaksLow; peaksMid; peaksHigh]/20);
@@ -64,7 +64,8 @@ for k = 1:numModes
     % lb = [freqs_g1(k)-3,0.001,0];
     % ub = [freqs_g1(k)+3,0.1,1];
     lb = [freqs_g1(k)-1,0.001,0.25*amps_g1(k)];
-    ub = [freqs_g1(k)+1,0.05,4*amps_g1(k)];
+    % ub = [freqs_g1(k)+1,0.05,4*amps_g1(k)];
+    ub = [freqs_g1(k)+1,0.02,4*amps_g1(k)];
     
     % Options for the optimization, you could change these and test different
     % things if you want
@@ -74,17 +75,23 @@ for k = 1:numModes
     % Run the optimiuzation here
     [x,fval,exitflag,output] = fmincon(fun,x0,[],[],[],[],lb,ub,[], options);
 
-    freqs_g2(k) = x(1)
-    dr_g2(k) = x(2)
-    amps_g2(k) = x(3)
+    if exitflag <= 0
+        warning('ModeFittingOpt:Stage1NotConverged', ...
+            'Stage 1 (mode %d, ~%.1f Hz) did not converge cleanly: exitflag=%d (%s)', ...
+            k, freqs_g1(k), exitflag, output.message);
+    end
+
+    freqs_g2(k) = x(1);
+    dr_g2(k) = x(2);
+    amps_g2(k) = x(3);
 
 end
 
-figure
-stem(freqs_g2,amps_g2)
-xlabel('Frequency (Hz)')
-ylabel('Modal amplitude')
-title('1st Optimization')
+% figure
+% stem(freqs_g2,amps_g2)
+% xlabel('Frequency (Hz)')
+% ylabel('Modal amplitude')
+% title('1st Optimization')
 disp(dr_g2)
 %% Second Optimization, all modes, just amplitudes
 x0 = amps_g2; % Need to make the variables as a vector for the optimization
@@ -108,16 +115,22 @@ options = optimoptions('fmincon', 'OptimalityTolerance', 1e-10, 'MaxIterations',
 % Run the optimiuzation here
 [x,fval,exitflag,output] = fmincon(fun,x0,[],[],[],[],lb,ub,[], options);
 
+if exitflag <= 0
+    warning('ModeFittingOpt:Stage2NotConverged', ...
+        'Stage 2 (amplitude-only fit) did not converge cleanly: exitflag=%d (%s)', ...
+        exitflag, output.message);
+end
+
 freqs_g3 = freqs_g2;
 dr_g3 = dr_g2;
 amps_g3 = x;
 
-figure
-stem(freqs_g3,amps_g3)
-xlabel('Frequency (Hz)')
-ylabel('Modal amplitude')
-title('2nd Optimization')
-disp(dr_g3)
+% figure
+% stem(freqs_g3,amps_g3)
+% xlabel('Frequency (Hz)')
+% ylabel('Modal amplitude')
+% title('2nd Optimization')
+% disp(dr_g3)
 
 %% Third Optimization, all modes, all params
 x0 = [freqs_g3, dr_g3, amps_g3]; % Need to make the variables as a vector for the optimization
@@ -139,6 +152,12 @@ options = optimoptions('fmincon', 'OptimalityTolerance', 1e-10, 'MaxIterations',
 % Run the optimiuzation here
 [x,fval,exitflag,output] = fmincon(fun,x0,[],[],[],[],lb,ub,[], options);
 
+if exitflag <= 0
+    warning('ModeFittingOpt:Stage3NotConverged', ...
+        'Stage 3 (all-params fit) did not converge cleanly: exitflag=%d (%s)', ...
+        exitflag, output.message);
+end
+
 freqs_g4 = x(:,1);
 dr_g4 = x(:,2);
 amps_g4 = x(:,3);
@@ -151,7 +170,7 @@ gmhat = amps_g4;
 [irhat4, t] = modalIr(freqs_g4,dr_g4,amps_g4,fs,dur);
 irhat = irhat4;
 
-disp(table(freqs_g1, fmhat, dr_g4, amps_g4))
+% disp(table(freqs_g1, fmhat, dr_g4, amps_g4))
 %% Debugging
 % disp('peakFreqs')
 % disp(sort(peakFreqs))
