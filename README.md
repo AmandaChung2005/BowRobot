@@ -20,6 +20,7 @@ BowRobot/
 ├── SW                   # Hardware files
 ├── UR Files
 │   ├── Code             # Main source code directory
+│   ├── Sensing          # Sensor reference materials
 │   └── UR7e             # Official Universal Robots documentation
 ├── RoboDK Simulation    # Robot simulation models
 └── README.md

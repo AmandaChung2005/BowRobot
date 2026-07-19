@@ -1,21 +1,25 @@
-from rtde_control import RTDEControlInterface
+import numpy as np
+
+simulation = True    # True = RoboDK, False = Real UR7e
+setup = False        # True = Get Coordinates, False = Run Program
 
 arm_ip = "192.168.1.101"
-rtde_c = RTDEControlInterface("arm_ip")
+
 
 # Program Parameters
 current_string = "E"  # G, D, A, E
-start_pos = "frog"    # frog, middle, tip
-start_dir = "downbow"    # upbow, downbow
+start_pos = "middle"    # frog, middle, tip
+start_dir = "upbow"    # upbow, downbow
 bowing_cycles = 3
 
 # General Movement Paramters
 speed = 0.10        # m/s
-acceleration = 0.2  # m/s^2
-joint_speed = 1.0
-joint_acceleration = 1.2
-lift_height = 0.05
-
+acceleration = 0.6  # m/s^2
+joint_speed = 0.5
+joint_acceleration = 0.5
+lift_height = 3
+step_xyz = 5
+step_rot = 10
 
 # Bowing Parameters
 bow_speed = 0.10        # m/s
@@ -34,35 +38,23 @@ wrench = [5, 0, -2.0, 0, 0, 0]  # Desired N of Force
 limits = [2, 2, 2, 1, 1, 1]
 
 
-home_position = []
-home_joints = []
+home_position = [-561.800, -23.698, -50.975, -127.279, 127.279, 0]
+home_joints = [0.00, -90.00, -60.00, -120.00, 90.00, -90.00]
 
+# Calibration
+import calibration_data
 
-# Important Positions (Bow Touching String)
-string_paths = {
-    "G": {
-        "frog": [],
-        "middle": [],
-        "tip": []
-    },
-    "D": {
-        "frog": [],
-        "middle": [],
-        "tip": []
-    },
-    "A": {
-        "frog": [],
-        "middle": [],
-        "tip": []
-    },
-    "E": {
-        "frog": [],
-        "middle": [],
-        "tip": []
-    }
-}
+if simulation:
+    data = calibration_data.simulation
+else:
+    data = calibration_data.real
 
-task_frames = {  
+hover_position = data["hover_position"]
+hover_joints = data["hover_joints"]
+string_paths = data["string_paths"]
+joint_paths = data["joint_paths"]
+
+task_frames = {
     string: poses["frog"]
     for string, poses in string_paths.items()
 }
