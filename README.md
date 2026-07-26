@@ -44,7 +44,7 @@ Windows:
 winget install Python.Python.3.12
 py -3.12 -m venv venv
 .\venv\Scripts\activate
-pip install -r downloads.txt
+pip install -r requirements.txt
 ```
 
 Linux/MacOS:
@@ -52,7 +52,7 @@ Ensure that Python 3.12 is installed.
 ```bash
 python3.12 -m venv venv
 source ./venv/bin/activate
-pip install -r downloads.txt
+pip install -r requirements.txt
 ```
 ## Running the Code
 Activate the virtual environemnt and run the desired script
