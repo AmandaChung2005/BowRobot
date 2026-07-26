@@ -2,13 +2,12 @@
 
 # RoboDK
 import sys
-sys.path.append(r"C:\Users\amand\Documents\UROP Summer '26\UR Files\Code")
+sys.path.append(config.robodk_python_path)
 
 
 from pynput.keyboard import Key, Listener
 import time
-import numpy as np
-from scipy.spatial.transform import Rotation
+
 import config
 import robot_interface as robot
 
@@ -34,7 +33,6 @@ directions = {
 }
 
 def pressed(key):
-    global gripperstate
     if key == Key.enter:   # Starts listener
         commands["start"] = True
         return
@@ -43,7 +41,7 @@ def pressed(key):
         commands["pause"] = True
         return
 
-    if key == Key.delete:   # Stops lisetener
+    if key == Key.delete:   # Stops listener
         commands["halt"] = True
         return
         
@@ -72,26 +70,25 @@ with Listener(on_press = pressed, on_release = released) as listener:
     else:
         connection_tries = 0
 
-        if not config.rtde_c.isConnected():
+        if not robot.isConnected():
             while connection_tries < 3:
-                config.rtde_c.reconnect()
+                robot.reconnect()
                 time.sleep(0.1)
-                if config.rtde_c.isConnected():
+                if robot.isConnected():
                   break
                 connection_tries += 1
 
-        if config.rtde_c.isConnected():
+        if robot.isConnected():
             print("Robot Connection Successful!")
             print ("Press ENTER to start")
             print ("Press DELETE to stop")
         else:
             print ("Robot Connection Not Working, Try Again")
-            config.rtde_c.stopScript()
+            robot.stop()
+            sys.exit()
 
 
     # Force Mode Parameters
-    limits = [2, 2, 2, 1, 1, 1]
-
     force_commands = {
         "a": (0, 10),   # +X
         "d": (0, -10),  # -X
@@ -155,7 +152,7 @@ with Listener(on_press = pressed, on_release = released) as listener:
                         config.task_frames[config.current_string],
                         selection_vector,
                         wrench,
-                        limits
+                        config.limits
                     )
                     
             robot.waitPeriod(t_start)

@@ -17,10 +17,10 @@ BowRobot/
 │   ├── Data             # Raw acoustic data
 │   ├── Functions        # Templates for analysis and plotting
 │   └── Analysis         # Scripts and experimental results
+├── Sensing              # Documentation for the project's sensors
 ├── SW                   # Hardware files
 ├── UR Files
 │   ├── Code             # Main source code directory
-│   ├── Sensing          # Sensor reference materials
 │   └── UR7e             # Official Universal Robots documentation
 ├── RoboDK Simulation    # Robot simulation models
 └── README.md
@@ -44,7 +44,7 @@ Windows:
 winget install Python.Python.3.12
 py -3.12 -m venv venv
 .\venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r downloads.txt
 ```
 
 Linux/MacOS:
@@ -52,7 +52,7 @@ Ensure that Python 3.12 is installed.
 ```bash
 python3.12 -m venv venv
 source ./venv/bin/activate
-pip install -r requirements.txt
+pip install -r downloads.txt
 ```
 ## Running the Code
 Activate the virtual environemnt and run the desired script
