@@ -3,7 +3,7 @@ setup = False        # True = Get Coordinates, False = Run Program
 
 arm_ip = "192.168.1.101"
 robodk_python_path = r"C:\Users\amand\Documents\RoboDK\Python"
-code_path = r"C:\Users\amand\Documents\UROP Summer '26\UR Files\Code"
+code_path = r"C:\Users\amand\Documents\BowRobot\UR Files\Code"
 
 # Program Parameters
 current_string = "E"  # G, D, A, E

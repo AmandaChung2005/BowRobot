@@ -1,16 +1,15 @@
 # https://github.com/IanBallinger/Robotics_final_spring2026_thursPM/blob/main/UR5/demo_4_16/keyboard_proto.py
 
-# RoboDK
-import sys
-sys.path.append(r"C:\Users\amand\Documents\UROP Summer '26\UR Files\Code")
-
-
 from pynput.keyboard import Key, Listener
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation
 import config
 import robot_interface as robot
+
+# RoboDK
+import sys
+sys.path.append(config.code_path)
 
 commands = {
     "start": False, # Starts Program
