@@ -7,7 +7,7 @@ code_path = r"C:\Users\amand\Documents\BowRobot\UR Files\Code"
 
 # Program Parameters
 current_string = "E"  # G, D, A, E
-start_pos = "middle"    # frog, middle, tip
+start_pos = "frog"    # frog, middle, tip
 start_dir = "upbow"    # upbow, downbow
 bowing_cycles = 3
 rosin_cycles = 1
@@ -33,10 +33,11 @@ rosin_wrench = [0, 0, -5, 0, 0, 0]
 rosin_limits = [2, 2, 2, 1, 1, 1]
 
 # Spiccato Parameters
-spiccato_length = 20
-spicacto_height = 5
-spiccato_frequency = 4
-spiccato_force = 3
+spiccato_offset = 100     # mm from frog
+spiccato_length = 20     # mm
+spiccato_height = 5      # mm
+spiccato_frequency = 4   # Hz
+spiccato_force = 3       # N
 spiccato_cycles = 10
 
 # Control Parameters

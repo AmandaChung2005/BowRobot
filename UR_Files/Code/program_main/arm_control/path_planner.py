@@ -1,6 +1,7 @@
 import numpy as np
 import config
 import calibration_data as cal
+import robot_interface as robot
 
 if config.simulation:
     cal = cal.simulation
@@ -16,8 +17,8 @@ def lift_pose(pose, height):
     return lift.tolist()
 
 # Basic Up and Down Bows
-def basic():
-    current_path = cal["string_paths"][config.current_string]
+def basic(current_string, start_pos):
+    current_path = cal["string_paths"][current_string]
 
     if config.simulation:
         frog_pose = current_path["frog"]
@@ -28,17 +29,17 @@ def basic():
         middle_pose = np.array(current_path["middle"], dtype=float)
         tip_pose = np.array(current_path["tip"], dtype=float)   
 
-    if config.start_pos == "frog":
+    if start_pos == "frog":
 
         basic_cartesian_path = [frog_pose, tip_pose, frog_pose]
         joint_names = ["frog", "tip", "frog"]
         
-    elif config.start_pos == "tip":
+    elif start_pos == "tip":
 
         basic_cartesian_path = [tip_pose, frog_pose, tip_pose]
         joint_names = ["tip", "frog", "tip"]
         
-    elif config.start_pos == "middle":
+    elif start_pos == "middle":
 
         if config.start_dir == "upbow":
 
@@ -58,7 +59,7 @@ def basic():
     
     basic_joint_path = [
         np.array(
-            cal["joint_paths"][config.current_string][name],
+            cal["joint_paths"][current_string][name],
             dtype=float
         )
         for name in joint_names
@@ -69,25 +70,59 @@ def basic():
 # Richochet Bowing
 
 # Spiccato Bowing
-def spiccato():
-    current_path = config.string_paths[config.current_string]
+def spiccato(current_string):
+    current_path = config.data["string_paths"][current_string]
 
-    frog = current_path["frog"]
-    middle = current_path["middle"]
-    tip = current_path["tip"]
+    frog = np.array(current_path["frog"], dtype = float)
+    middle = np.array(current_path["middle"], dtype = float)
+    tip = np.array(current_path["tip"], dtype = float)
 
-    lift_height = config.spicacto_height
-    lift_frog = lift_pose(frog, lift_height)
-    lift_middle = lift_pose(middle, lift_height)
-    lift_tip = lift_pose(tip, lift_height)
+    frog_middle_distance = np.linalg.norm(middle[:3] - frog[:3])
 
-    cartesian_path = [
-        frog,
-        middle,
-        tip,
-        lift_tip,
-        lift_middle,
-        lift_frog
+    offset = min(config.spiccato_offset, frog_middle_distance)
+    alpha = offset/frog_middle_distance
+
+    start = (1-alpha) * frog + alpha * middle
+
+    stroke = min(config.spiccato_length, frog_middle_distance-offset)
+    beta = stroke/frog_middle_distance
+
+    end = start.copy()
+    end[:3] += beta * (middle[:3] - frog[:3])
+
+
+    # Spiccato Around Middle
+    # half_length = config.spiccato_length/2
+
+    # start = middle.copy()
+    # start[:3] -= direction * half_length
+
+    # end = middle.copy()
+    # end[:3] += direction * half_length
+
+    lift_start = np.array(
+        lift_pose(start, config.spiccato_height),
+        dtype = float
+    )
+
+    lift_end = np.array(
+        lift_pose(end, config.spiccato_height),
+        dtype = float
+    )
+
+    spiccato_cartesian_path = [
+        lift_start,
+        start,
+        end,
+        lift_end,
+        end,
+        start,
+        lift_start
     ]
 
-    return cartesian_path
+    spiccato_joint_path = [
+        robot.solveIK(pose)
+        for pose in spiccato_cartesian_path
+    ]
+
+    return spiccato_cartesian_path, spiccato_joint_path

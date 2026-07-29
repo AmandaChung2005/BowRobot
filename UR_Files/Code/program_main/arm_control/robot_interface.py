@@ -19,6 +19,9 @@ else:
 
 # Motion control
 def moveJ(joints, speed, acceleration):
+    if hasattr(joints, "tolist"):
+        joints = joints.tolist()
+        
     if config.simulation:
         robot.setSpeed(
             speed_linear = config.speed*1000,
@@ -26,8 +29,9 @@ def moveJ(joints, speed, acceleration):
             speed_joints = np.degrees(speed),
             accel_joints = np.degrees(acceleration)
         )
-        
-        robot.MoveJ(joints, blocking=False)
+    
+        robot.MoveJ(joints, blocking=True)
+
     else:
         rtde_c.moveJ(
             joints,
@@ -212,6 +216,24 @@ def stop():
     rtde_c.servoStop()
     rtde_c.forceModeStop()
 
+    # Inverse Kinematics
+def solveIK(pose):
+    if config.simulation:
+        target_pose = TxyzRxyz_2_Pose(pose)
+        joints = robot.SolveIK(target_pose)
+
+        print("Pose:", pose)
+        print("IK Result:", joints)
+
+        if joints is None:
+            raise RuntimeError("IK Failed")
+
+        return np.array(joints.list(), dtype = float)
+
+    else:
+        return None
+
+
 # Motion Routines
 def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
     if config.simulation:
@@ -253,3 +275,4 @@ def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
             )
         
             waitPeriod(t_start)
+

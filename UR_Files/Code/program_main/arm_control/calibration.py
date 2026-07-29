@@ -74,7 +74,7 @@ while True:
         valid_positions_violin = {"hover", "frog", "middle", "tip"}
 
         while True:
-            target = input("\nPosition (hover, frog, middle, tip): ".strip().lower())
+            target = input("\nPosition (hover, frog, middle, tip): ").strip().lower()
 
             if target in valid_positions_violin:
                 break
@@ -101,7 +101,7 @@ while True:
 
     
     # Update Calibration File
-    with open("calibration_data.py", "w") as f:
+    with open(cal.__file__, "w") as f:
 
         f.write("# RoboDK Calibration\n")
         f.write("simulation = ")
