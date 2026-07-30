@@ -1,61 +1,144 @@
 import nidaqmx
 import numpy as np
 import matplotlib.pyplot as plt
-from nidaqmx.constants import AcquisitionType
+from nidaqmx.constants import AcquisitionType, Coupling, ExcitationSource
+from nidaqmx.system import System
+
+import config
+import plotting as plot
 
 class SensorDAQ:
-    def __init__(
-            self,
-            device="Dev1",
-            channels=("ai0",),
-            sample_rate=10000
-    ):
-        self.device = device
-        self.channels = channels
-        self.sample_rate = sample_rate
-        self.task = None
+    def __init__(self):
+            self.task = None
 
     def connect(self):
         self.task = nidaqmx.Task()
 
-        for channel in self.channels:
-            self.task.ai_channels.add_ai_voltage_chan(
-                f"{self.device}/{channel}"
+        channels = []
+
+        accel = config.sensors["TriAccelerometer"]
+
+        for axis, physical_channel in config.daq_channels["TriAccelerometer"].items():
+            channels.append({
+                "physical_channel": physical_channel,
+                "name": f"Accel_{axis.upper()}",
+                "sensor": accel
+            })
+
+        for sensor_name, physical_channel in config.daq_channels.items():
+            if sensor_name == "TriAccelerometer":
+                continue
+            channels.append({
+                "physical_channel": physical_channel,
+                "name": sensor_name,
+                "sensor": config.sensors[sensor_name]
+            })
+
+        channels.sort(
+            key=lambda c: int(c["physical_channel"].replace("ai", ""))
+        )
+
+        for ch in channels:
+            channel = self.task.ai_channels.add_ai_voltage_chan(
+                f"{config.device}/{ch['physical_channel']}",
+                name_to_assign_to_channel = ch["name"]
             )
 
-    def read(self, samples=10000):
+            if ch["sensor"]["sensor_type"] == "IEPE":
+                channel.ai_coupling = Coupling.AC
+                # channel.ai_excit_src = ExcitationSource.INTERNAL
+                # channel.ai_excit_val = ch["sensor"]["excitation_current"]
+
+            else:
+                channel.ai_coupling = Coupling.DC
+
+    @staticmethod
+    def test_connection():
+        print("Searching for NI devices...\n")
+
+        system = System.local()
+        devices = list(system.devices)
+
+        if len(devices) == 0:
+            print("No NI devices found")
+            return False
+
+        print("Detected Devices: ")
+        for device in devices:
+            print(f" {device.name}")
+
+        print()
+
+        if config.device in [device.name for device in devices]:
+            print(f"Successfully connected to {config.device}")
+            return True
+
+        print(f"{config.device} was not found")
+        return False
+
+    def read(self, seconds = config.default_duration):
+        samples = int(seconds * config.sample_rate)
+
         self.task.timing.cfg_samp_clk_timing(
-            rate=self.sample_rate,
-            sample_mode=AcquisitionType.FINITE,
-            samps_per_chan=samples
+            rate = config.sample_rate,
+            sample_mode = AcquisitionType.FINITE,
+            samps_per_chan = samples
         )
 
-        data = self.task.read(
-            number_of_samples_per_channel=samples
+        data = np.asarray(
+            self.task.read(
+                number_of_samples_per_channel=samples
+            )
         )
 
-        return np.asarray(data)
+        time = np.arange(samples)/config.sample_rate
 
-    def plot(self,data):
-        plt.figure()
+        return time, data
 
-        if data.ndim ==1:
-            plt.plot(data)
 
-        else:
-            for i, channel in enumerate(data):
-                plt.plot(channel, label=f"Channel {i}")
+    def save(self, filename, time, data):
+  
+        np.savez(
+            filename,
+            time = time,
+            data = data,
+            sample_rate = config.sample_rate,
+            channel_names = [channel.name for channel in self.task.ai_channels]
+        )
 
-            plt.legend()
-
-        plt.xlabel("Sample")
-        plt.ylabel("Voltage (V)")
-        plt.title("Sensor Data")
-        plt.gird(True)
-
-        plt.show()
+        print(f"Saved {filename}.npz")      
 
     def disconnect(self):
         if self.task is not None:
             self.task.close()
             self.task = None
+
+if __name__ == "__main__":
+
+    SensorDAQ.test_connection()
+
+    daq = SensorDAQ()
+
+    print("Connecting...")
+    daq.connect()
+
+    print("\nConfigured Channels:")
+
+    for channel in daq.task.ai_channels:
+        print(f"  {channel.name}")
+
+    print("Reading data...")
+    time, data = daq.read()
+
+    print(f"\nData shape: {data.shape}")
+
+    print("Plotting...")
+    plot.plot(time, data)
+
+    print("Saving...")
+    daq.save("trial_001", time, data)
+
+    print("Disconnecting...")
+    daq.disconnect()
+
+    print("Finshed")

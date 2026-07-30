@@ -13,7 +13,7 @@ The repository is organized as follows:
 
 ```text
 BowRobot/
-├── Matlab
+├── AcousticData
 │   ├── Data             # Raw acoustic data
 │   ├── Functions        # Templates for analysis and plotting
 │   └── Analysis         # Scripts and experimental results
@@ -55,7 +55,7 @@ source ./venv/bin/activate
 pip install -r requirements.txt
 ```
 ## Running the Code
-Activate the virtual environemnt and run the desired script
+Activate the virtual environment and run the desired script
 
 Windows PowerShell:
 

@@ -219,16 +219,28 @@ def stop():
     # Inverse Kinematics
 def solveIK(pose):
     if config.simulation:
-        target_pose = TxyzRxyz_2_Pose(pose)
+        if isinstance(pose, list) and len(pose) ==16:
+            target_pose =Mat([
+                pose[0:4],
+                pose[4:8],
+                pose[8:12],
+                pose[12:16]
+            ])
+        else:
+            if hasattr(pose, "tolist"):
+                pose = pose.tolist()
+            target_pose = TxyzRxyz_2_Pose(pose)
+
         joints = robot.SolveIK(target_pose)
 
-        print("Pose:", pose)
-        print("IK Result:", joints)
+        if joints is None or joints.size(0) == 0 or joints.size(1) == 0:
+            raise RuntimeError(f"IK Failed for Pose: {pose}")
 
-        if joints is None:
-            raise RuntimeError("IK Failed")
-
-        return np.array(joints.list(), dtype = float)
+        joints = np.array(joints.list(), dtype = float)
+        if not np.any(joints):
+            raise RuntimeError(f"IK returned a degenerate all-zero solution for Pose : {pose}")
+        
+        return joints
 
     else:
         return None
