@@ -1,6 +1,7 @@
 simulation = True    # True = RoboDK, False = Real UR7e
 setup = False        # True = Get Coordinates, False = Run Program
 
+robotName = "UR7e"
 arm_ip = "192.168.1.101"
 robodk_python_path = r"C:\Users\amand\Documents\RoboDK\Python"
 code_path = r"C:\Users\amand\Documents\BowRobot\UR Files\Code"
@@ -52,8 +53,8 @@ wrench = [5, 0, -2.0, 0, 0, 0]  # Desired N of Force
 limits = [2, 2, 2, 1, 1, 1]
 
 
-home_position = [-561.800, -23.698, -50.975, -127.279, 127.279, 0]
-home_joints = [0.00, -90.00, -60.00, -120.00, 90.00, -90.00]
+home_position = [439.398, -133.300, 484.025, 0.000, 180.000, 0.000]
+home_joints = [0.00, -90.00, -60.00, -120.00, 90.00, 90.00]
 
 # Calibration
 import calibration_data

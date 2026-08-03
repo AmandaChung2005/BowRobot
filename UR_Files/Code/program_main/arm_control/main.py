@@ -51,6 +51,7 @@ while True:
 
         while True:
             user.wait_for_enter("Move Onto Rosin")
+
             robot.moveJ(
                 cal["rosin_joints"]["tip"],
                 config.speed,
@@ -113,11 +114,18 @@ while True:
             # Move onto String Position
             user.wait_for_enter("Move Onto String")      
 
-            robot.moveJ(
-                cal["joint_paths"][current_string][start_pos],
-                config.speed,
-                config.acceleration
-            )
+            if start_pos == "middle":
+                robot.moveJ(
+                    robot.get_middle_joints(current_string),
+                    config.speed,
+                    config.acceleration
+                )
+            else:
+                robot.moveJ(
+                    cal["joint_paths"][current_string][start_pos],
+                    config.speed,
+                    config.acceleration
+                )
 
             # Basic Bowing
             user.wait_for_enter("Start Bowing")
@@ -146,7 +154,6 @@ while True:
             spiccato_cartesian_path, spiccato_joint_path = path.spiccato(
                 current_string
             )
- 
 
             robot.moveJ(
                 spiccato_joint_path[0],
@@ -154,6 +161,7 @@ while True:
                 config.acceleration
             )
 
+            # print("\nMoving...")
             # robot.moveJ(
             #     cal["joint_paths"][config.current_string]["frog"],
             #     config.speed,

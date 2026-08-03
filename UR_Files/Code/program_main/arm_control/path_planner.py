@@ -20,14 +20,9 @@ def lift_pose(pose, height):
 def basic(current_string, start_pos):
     current_path = cal["string_paths"][current_string]
 
-    if config.simulation:
-        frog_pose = current_path["frog"]
-        middle_pose = current_path["middle"]
-        tip_pose = current_path["tip"]
-    else:
-        frog_pose = np.array(current_path["frog"], dtype=float)
-        middle_pose = np.array(current_path["middle"], dtype=float)
-        tip_pose = np.array(current_path["tip"], dtype=float)   
+    frog_pose = np.array(current_path["frog"], dtype=float)
+    middle_pose = np.array(robot.get_middle_pose(current_string), dtype=float)
+    tip_pose = np.array(current_path["tip"], dtype=float)   
 
     if start_pos == "frog":
 
@@ -57,13 +52,18 @@ def basic(current_string, start_pos):
     else:
         raise ValueError("start_pos must be 'frog', 'middle', or 'tip'")
     
-    basic_joint_path = [
-        np.array(
-            cal["joint_paths"][current_string][name],
-            dtype=float
-        )
-        for name in joint_names
-    ]
+    basic_joint_path = []
+
+    for name in joint_names:
+        if name == "middle":
+            basic_joint_path.append(robot.get_middle_joints(current_string))
+        else:
+            basic_joint_path.append(
+                np.array(
+                    cal["joint_paths"][current_string][name],
+                    dtype=float
+                )
+            )
 
     return basic_cartesian_path, basic_joint_path
 
@@ -71,25 +71,24 @@ def basic(current_string, start_pos):
 
 # Spiccato Bowing
 def spiccato(current_string):
-    current_path = config.data["string_paths"][current_string]
+    current_path = cal["string_paths"][current_string]
 
     frog = np.array(current_path["frog"], dtype = float)
-    middle = np.array(current_path["middle"], dtype = float)
+    middle = np.array(robot.get_middle_pose(current_string), dtype = float)
     tip = np.array(current_path["tip"], dtype = float)
 
     frog_middle_distance = np.linalg.norm(middle[:3] - frog[:3])
 
     offset = min(config.spiccato_offset, frog_middle_distance)
-    alpha = offset/frog_middle_distance
 
-    start = (1-alpha) * frog + alpha * middle
+    segment = middle[:3] - frog[:3]
+    segment /= frog_middle_distance
 
-    stroke = min(config.spiccato_length, frog_middle_distance-offset)
-    beta = stroke/frog_middle_distance
+    start = frog.copy()
+    start[:3] += segment * offset
 
     end = start.copy()
-    end[:3] += beta * (middle[:3] - frog[:3])
-
+    end[:3] += segment * config.spiccato_length
 
     # Spiccato Around Middle
     # half_length = config.spiccato_length/2
@@ -120,9 +119,13 @@ def spiccato(current_string):
         lift_start
     ]
 
-    spiccato_joint_path = [
-        robot.solveIK(pose)
-        for pose in spiccato_cartesian_path
-    ]
+    reference = robot.getCurrentJoints()
+
+    spiccato_joint_path = []
+
+    for pose in spiccato_cartesian_path:
+        q = robot.solveIK(pose, reference = reference)
+        spiccato_joint_path.append(q)
+        reference = q
 
     return spiccato_cartesian_path, spiccato_joint_path

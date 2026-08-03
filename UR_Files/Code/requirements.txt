@@ -3,4 +3,5 @@ ur_rtde==1.6.2
 nidaqmx==1.5.0
 pynput
 matplotlib==3.10.8
-robodk==5.9.4
+robodk==6.0.1
+scipy==1.18.0

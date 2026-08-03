@@ -1,17 +1,17 @@
+import sys
 import config
+cal = config.data
 
 # Initialization (Simulation vs Reality)
 if config.simulation:
-    import sys
-
     sys.path.append(config.robodk_python_path)
 
     from robodk.robolink import Robolink, ITEM_TYPE_ROBOT
-    from robodk.robomath import transl, rotx, roty, rotz, Pose_2_TxyzRxyz, TxyzRxyz_2_Pose, Mat
+    from robodk.robomath import *
     import numpy as np
 
     RDK = Robolink()
-    robot = RDK.Item('', ITEM_TYPE_ROBOT)
+    robot = RDK.Item(config.robotName, ITEM_TYPE_ROBOT)
     
 else:
     from rtde_control import RTDEControlInterface
@@ -19,6 +19,8 @@ else:
 
 # Motion control
 def moveJ(joints, speed, acceleration):
+    print("\nMoving...")
+    
     if hasattr(joints, "tolist"):
         joints = joints.tolist()
         
@@ -40,6 +42,8 @@ def moveJ(joints, speed, acceleration):
         )
 
 def moveL(pose, speed, acceleration):
+    print("\nMoving...")
+
     if config.simulation:
         if isinstance(pose, list) and len(pose) == 16:
             rdk_pose = Mat([
@@ -66,6 +70,8 @@ def moveL(pose, speed, acceleration):
         )
 
 def servoL(pose, speed, acceleration, dt, lookahead_time, gain):
+    print("\nMoving...")
+
     if config.simulation:
         target_pose = TxyzRxyz_2_Pose(pose)
         solutions = robot.SolveIK_All(target_pose)
@@ -209,6 +215,12 @@ def getJoints():
         return robot.Joints()
     return None
 
+def getCurrentJoints():
+    if config.simulation:
+        return np.array(robot.Joints().list(), dtype = float)
+    else:
+        return np.array(rtde_r.getActualQ(), dtype = float)
+
 # Robot Shutdown
 def stop():
     if config.simulation:
@@ -216,34 +228,53 @@ def stop():
     rtde_c.servoStop()
     rtde_c.forceModeStop()
 
-    # Inverse Kinematics
-def solveIK(pose):
+# Calculations
+def solveIK(pose, reference = None):
     if config.simulation:
-        if isinstance(pose, list) and len(pose) ==16:
-            target_pose =Mat([
-                pose[0:4],
-                pose[4:8],
-                pose[8:12],
-                pose[12:16]
-            ])
+        if isinstance(pose, Mat):
+            target_pose = pose
         else:
             if hasattr(pose, "tolist"):
                 pose = pose.tolist()
-            target_pose = TxyzRxyz_2_Pose(pose)
 
-        joints = robot.SolveIK(target_pose)
+            tool = robot.PoseTool()
+            target_pose = TxyzRxyz_2_Pose(pose) * tool.inv()
 
-        if joints is None or joints.size(0) == 0 or joints.size(1) == 0:
-            raise RuntimeError(f"IK Failed for Pose: {pose}")
+        solutions = robot.SolveIK_All(target_pose)    
 
-        joints = np.array(joints.list(), dtype = float)
-        if not np.any(joints):
-            raise RuntimeError(f"IK returned a degenerate all-zero solution for Pose : {pose}")
-        
-        return joints
 
-    else:
-        return None
+        if reference is not None:
+            robot.setJoints(reference.tolist())
+
+        q = robot.SolveIK(target_pose)
+
+        if q is None:
+            raise RuntimeError(f"IK Failed for Pose: \n{pose}")
+
+        # Verify solution
+        robot.setJoints(q)
+
+        actual = np.array(Pose_2_TxyzRxyz(robot.Pose()), dtype=float)
+        target = np.array(pose, dtype=float)
+
+        return np.array(q.list(), dtype=float)    
+
+    return None
+
+def get_middle_pose(string):
+    frog = np.array(cal["string_paths"][string]["frog"])
+    tip = np.array(cal["string_paths"][string]["tip"])
+    return 0.5 * (frog + tip)
+
+def get_middle_joints(string):
+    middle_pose = get_middle_pose(string)
+
+    frog_joints = np.array(
+        cal["joint_paths"][string]["frog"],
+        dtype = float
+    )
+
+    return solveIK(middle_pose, reference = frog_joints)
 
 
 # Motion Routines
@@ -288,3 +319,7 @@ def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
         
             waitPeriod(t_start)
 
+def getRobot():
+    if config.simulation:
+        return robot
+    return None
