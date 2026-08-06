@@ -1,35 +1,40 @@
 import matplotlib.pyplot as plt
 import config
 
-def plot(self, time, data):
-    plt.figure(figsize = (10, 6))
+class Plotter:
+    def __init__(self):
+        pass
 
-    if data.ndim ==1:
-        plt.plot(time, data)
+    def plot(self, time, data):
+        fig = plt.figure(figsize=(10, 6))
 
-    else:
-        labels = []
+        if data.ndim == 1:
+            plt.plot(time, data)
 
-        if "TriAccelerometer" in config.daq_channels:
-            for axis in config.daq_channels["TriAccelerometer"]:
-                labels.append(f"Accel {axis.upper()}")
+        else:
+            labels = []
 
-        for sensor in config.daq_channels:
-            if sensor != "TriAccelerometer":
-                labels.append(sensor)
+            if "TriAccelerometer" in config.daq_channels:
+                for axis in config.daq_channels["TriAccelerometer"]:
+                    labels.append(f"Accel {axis.upper()}")
 
-        for i, channel in enumerate(data):
-            if i < len(labels):
-                plt.plot(time, channel, label = labels[i])
-            else:
-                plt.plot(time, channel, label = f"Channel {i}")
+            for sensor in config.daq_channels:
+                if sensor != "TriAccelerometer":
+                    labels.append(sensor)
 
-        plt.legend()
+            for i, channel in enumerate(data):
+                if i < len(labels):
+                    plt.plot(time, channel, label = labels[i])
+                else:
+                    plt.plot(time, channel, label = f"Channel {i}")
 
-    plt.xlabel("Time (s)")
-    plt.ylabel("Voltage (V)")
-    plt.title("Sensor Data")
-    plt.grid(True)
-    plt.tight_layout()
+            plt.legend()
 
-    plt.show()
+        plt.xlabel("Time (s)")
+        plt.ylabel("Voltage (V)")
+        plt.title("Sensor Data")
+        plt.grid(True)
+        plt.tight_layout()
+
+        plt.show(block = False)
+        plt.pause(0.1)

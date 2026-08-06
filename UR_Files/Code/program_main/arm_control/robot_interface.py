@@ -15,7 +15,12 @@ if config.simulation:
     
 else:
     from rtde_control import RTDEControlInterface
-    rtde_c = RTDEControlInterface(config.arm_ip)
+    from rtde_receive import RTDEReceiveInterface
+    rtde_c = RTDEControlInterface(
+        config.arm_ip,
+        RTDEControlInterface.FLAG_USE_EXT_UR_CAP
+        )
+    rtde_r = RTDEReceiveInterface(config.arm_ip)
 
 # Motion control
 def moveJ(joints, speed, acceleration):
@@ -203,7 +208,7 @@ def waitPeriod(t_start):
 def getActualTCPPose():
     if config.simulation:
         return Pose_2_TxyzRxyz(robot.Pose())
-    return rtde_c.getActualTCPPose()
+    return rtde_r.getActualTCPPose()
 
 def getPose():
     if config.simulation:

@@ -1,0 +1,9 @@
+def bowrobot():
+    socket_open("192.168.56.100", 50003)
+
+    while True:
+        line = socket_read_string()
+        if line == "movej
+end
+
+bowrobot()

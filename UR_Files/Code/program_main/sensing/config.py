@@ -4,13 +4,17 @@ device = "Dev1"
 sample_rate = 4800
 default_duration = 0.1
 
+save_name = "test"
+save_folder = "data"
+file_extension = ".npz"
+
 daq_channels = {
     "Microphone": "ai0",
-    # "TriAccelerometer": {
-    #     "x": "ai1",
-    #     "y": "ai2",
-    #     "z": "ai3"
-    # }
+    "TriAccelerometer": {
+        "x": "ai1",
+        "y": "ai2",
+        "z": "ai3"
+    }
 }
 
 sensors = {

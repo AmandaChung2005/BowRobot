@@ -1,8 +1,8 @@
-simulation = True    # True = RoboDK, False = Real UR7e
+simulation = False   # True = RoboDK, False = Real UR7e
 setup = False        # True = Get Coordinates, False = Run Program
 
 robotName = "UR7e"
-arm_ip = "192.168.1.101"
+arm_ip = "192.168.56.101"
 robodk_python_path = r"C:\Users\amand\Documents\RoboDK\Python"
 code_path = r"C:\Users\amand\Documents\BowRobot\UR Files\Code"
 
@@ -14,8 +14,8 @@ bowing_cycles = 3
 rosin_cycles = 1
 
 # General Movement Paramters
-speed = 0.1        # m/s
-acceleration = 0.1  # m/s^2
+speed = 0.5        # m/s
+acceleration = 0.5  # m/s^2
 joint_speed = 0.5
 joint_acceleration = 0.1
 lift_height = 3

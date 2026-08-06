@@ -1,0 +1,34 @@
+<div *ngIf="applicationNode" class="main-section">
+    <h1 class="header" [textContent]="baseTranslationKey + '.title' | translate"></h1>
+    <p class="info-text" [textContent]="baseTranslationKey + '.description.line1' | translate"></p>
+    <p class="info-text" [textContent]="baseTranslationKey + '.description.line2' | translate"></p>
+
+    <h2 class="sub-header" [textContent]="baseTranslationKey + '.settings.header' | translate"></h2>
+    <p class="info-text" [textContent]="baseTranslationKey + '.settings.description' | translate"></p>
+    <div class="flex-container">
+        <div class="input-ip">
+            <ur-dialog-input [type]="'text'" [label]="'presenter.robotIP-input-description' | translate"
+                [value]="applicationNode.robotIP" (valueChanged)="writeParam(port.value, robotIP.value)"
+                #robotIP></ur-dialog-input>
+        </div>
+        <div class="input-port">
+            <ur-dialog-input [type]="'number'" [label]="'presenter.port-input-description' | translate"
+                [value]="applicationNode.port" (valueChanged)="writeParam(port.value, robotIP.value)"
+                #port></ur-dialog-input>
+        </div>
+    </div>
+
+    <h2 class="sub-header" [textContent]="baseTranslationKey + '.important.header' | translate"></h2>
+    <p class="info-text pre-line" [textContent]="baseTranslationKey + '.important.line1' | translate"></p>
+    <p class="info-text pre-line" [textContent]="baseTranslationKey + '.important.line2' | translate"></p>
+    <p class="info-text pre-line" [textContent]="baseTranslationKey + '.important.line3' | translate"></p>
+    <div class="vertical-spacer"></div>
+    <p class="info-text" [textContent]="baseTranslationKey + '.serviceHowToEnable.text' | translate"></p>
+    <span class="highlight">
+        {{ baseTranslationKey + '.serviceHowToEnable.settings' | translate }}
+        <span class="arrow">→</span>
+        {{ baseTranslationKey + '.serviceHowToEnable.security' | translate }}
+        <span class="arrow">→</span>
+        {{ baseTranslationKey + '.serviceHowToEnable.services' | translate }}
+    </span>
+</div>

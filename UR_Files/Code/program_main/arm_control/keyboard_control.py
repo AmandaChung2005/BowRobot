@@ -71,21 +71,21 @@ with Listener(on_press = pressed, on_release = released) as listener:
     else:
         connection_tries = 0
 
-        if not config.rtde_c.isConnected():
+        if not robot.rtde_c.isConnected():
             while connection_tries < 3:
-                config.rtde_c.reconnect()
+                robot.rtde_c.reconnect()
                 time.sleep(0.1)
-                if config.rtde_c.isConnected():
+                if robot.rtde_c.isConnected():
                   break
                 connection_tries += 1
 
-        if config.rtde_c.isConnected():
+        if robot.rtde_c.isConnected():
             print("Robot Connection Successful!")
             print ("Press ENTER to start")
             print ("Press DELETE to stop")
         else:
             print ("Robot Connection Not Working, Try Again")
-            config.rtde_c.stopScript()
+            robot.rtde_c.stopScript()
 
 
     # Force Mode Parameters
@@ -150,12 +150,35 @@ with Listener(on_press = pressed, on_release = released) as listener:
                 if config.simulation:
                     robot.jogCartesian(selection_vector, wrench)
                 else:
-                    robot.forceMode(
-                        config.task_frames[config.current_string],
-                        selection_vector,
-                        wrench,
-                        limits
+                    # robot.forceMode(
+                    #     config.task_frames[config.current_string],
+                    #     selection_vector,
+                    #     wrench,
+                    #     limits
+                    # )
+
+                    pose = robot.getActualTCPPose()
+
+                    step = 0.010  # 10 mm
+
+                    if directions["w"]:
+                        pose[1] += step
+                    if directions["s"]:
+                        pose[1] -= step
+                    if directions["a"]:
+                        pose[0] += step
+                    if directions["d"]:
+                        pose[0] -= step
+                    if directions["q"]:
+                        pose[2] += step
+                    if directions["e"]:
+                        pose[2] -= step
+
+                    robot.moveL(
+                        pose,
+                        0.05,
+                        0.1
                     )
-                    
+
             robot.waitPeriod(t_start)
 

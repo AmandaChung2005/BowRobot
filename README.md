@@ -47,6 +47,14 @@ py -3.12 -m venv venv
 pip install -r requirements.txt
 ```
 
+Connecting to the Windows Subsytem for LInux
+```bash
+wsl
+cd /mnt/c/Users/path/to/BowRobot/Code
+source venv_linux/bin/activate
+python your_script.py
+```
+
 Linux/MacOS:
 Ensure that Python 3.12 is installed.
 ```bash

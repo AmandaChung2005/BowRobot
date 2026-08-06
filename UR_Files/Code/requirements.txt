@@ -1,5 +1,5 @@
 numpy==2.4.3
-ur_rtde==1.6.2
+ur_rtde==1.6.3
 nidaqmx==1.5.0
 pynput
 matplotlib==3.10.8

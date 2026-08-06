@@ -1,10 +1,22 @@
-from robodk.robolink import *
-from robodk.robomath import *
 
+from rtde_control import RTDEControlInterface
+from rtde_receive import RTDEReceiveInterface
 
-RDK = Robolink()
+IP = "192.168.56.101"
 
-robot = RDK.Item('', ITEM_TYPE_ROBOT)
+rtde_c = RTDEControlInterface(
+    IP,
+    500.0,
+    flags=int(RTDEControlInterface.FLAG_USE_EXT_UR_CAP)
+)
 
-print(robot.Pose())
-print(robot.SolveIK(robot.Pose()))
+rtde_r = RTDEReceiveInterface(IP)
+
+print("Connected:", rtde_c.isConnected())
+
+q = rtde_r.getActualQ()
+q[0] += 0.2
+
+print("moveJ returned:", rtde_c.moveJ(q, 0.5, 0.5))
+
+rtde_c.stopScript()

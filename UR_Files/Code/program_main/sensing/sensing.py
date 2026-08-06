@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from nidaqmx.constants import AcquisitionType, Coupling, ExcitationSource
 from nidaqmx.system import System
+import os
 
 import config
 import plotting as plot
@@ -46,8 +47,8 @@ class SensorDAQ:
 
             if ch["sensor"]["sensor_type"] == "IEPE":
                 channel.ai_coupling = Coupling.AC
-                # channel.ai_excit_src = ExcitationSource.INTERNAL
-                # channel.ai_excit_val = ch["sensor"]["excitation_current"]
+                channel.ai_excit_src = ExcitationSource.INTERNAL
+                channel.ai_excit_val = ch["sensor"]["excitation_current"]
 
             else:
                 channel.ai_coupling = Coupling.DC
@@ -93,20 +94,66 @@ class SensorDAQ:
 
         time = np.arange(samples)/config.sample_rate
 
-        return time, data
+        return time, data       
 
+    def get_save_name(self):
+        os.makedirs(config.save_folder, exist_ok = True)
+
+        index = 0
+
+        while True:
+            if index == 0:
+                suggested = config.save_name
+            else:
+                suggested = f"{config.save_name}_{index:03d}"
+
+            filepath = os.path.join(config.save_folder, suggested + config.file_extension)
+
+            if not os.path.exists(filepath):
+                break
+
+            index += 1
+
+        while True:
+            response = input(
+                f"Suggested File Name: {suggested}\n"
+                "Press ENTER to accept, or type a new name: "
+            ).strip()
+
+            if response == "":
+                return suggested
+
+            filepath = os.path.join(config.save_folder, response + config.file_extension)
+
+            if os.path.exists(filepath):
+                overwrite = input(
+                    f"{response}.npz already exists. Overwrite?"
+                ).lower()
+
+                if overwrite in {"y", "yes"}:
+                    return response
+
+                elif overwrite in {"n", "no"}:
+                    continue
+
+                else:
+                    print("Invalid Input. Try Again")
+
+            else:
+                return response
 
     def save(self, filename, time, data):
-  
+        filename = self.get_save_name()
+
+        filepath = os.path.join(config.save_folder, filename + config.file_extension)
+
         np.savez(
-            filename,
+            filepath,
             time = time,
             data = data,
             sample_rate = config.sample_rate,
             channel_names = [channel.name for channel in self.task.ai_channels]
         )
-
-        print(f"Saved {filename}.npz")      
 
     def disconnect(self):
         if self.task is not None:
@@ -122,8 +169,17 @@ if __name__ == "__main__":
     print("Connecting...")
     daq.connect()
 
-    print("\nConfigured Channels:")
+    print("\nChannel Configuration:")
+    for channel in daq.task.ai_channels:
+        print(
+            channel.name,
+            "| Coupling:",
+            channel.ai_coupling,
+            "| Excitation:",
+            channel.ai_excit_val
+        )
 
+    print("\nConfigured Channels:")
     for channel in daq.task.ai_channels:
         print(f"  {channel.name}")
 
@@ -133,12 +189,15 @@ if __name__ == "__main__":
     print(f"\nData shape: {data.shape}")
 
     print("Plotting...")
-    plot.plot(time, data)
+    plotter = plot.Plotter()
+    plotter.plot(time, data)
 
     print("Saving...")
-    daq.save("trial_001", time, data)
+    daq.save(time, data)
 
     print("Disconnecting...")
     daq.disconnect()
 
     print("Finshed")
+
+    plt.show()
