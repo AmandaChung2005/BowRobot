@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-import config
+import sensing.sensing_config as sensing_config
 
 class Plotter:
     def __init__(self):
@@ -14,11 +14,11 @@ class Plotter:
         else:
             labels = []
 
-            if "TriAccelerometer" in config.daq_channels:
-                for axis in config.daq_channels["TriAccelerometer"]:
+            if "TriAccelerometer" in sensing_config.daq_channels:
+                for axis in sensing_config.daq_channels["TriAccelerometer"]:
                     labels.append(f"Accel {axis.upper()}")
 
-            for sensor in config.daq_channels:
+            for sensor in sensing_config.daq_channels:
                 if sensor != "TriAccelerometer":
                     labels.append(sensor)
 

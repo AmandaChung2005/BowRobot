@@ -2,7 +2,7 @@ import sys
 import time
 from pynput.keyboard import Key, Listener
 
-import robot_interface as robot
+from . import robot_interface as robot
 
 halt = False
 selection = None

@@ -1,11 +1,3 @@
-simulation = False   # True = RoboDK, False = Real UR7e
-setup = False        # True = Get Coordinates, False = Run Program
-
-robotName = "UR7e"
-arm_ip = "192.168.56.101"
-robodk_python_path = r"C:\Users\amand\Documents\RoboDK\Python"
-code_path = r"C:\Users\amand\Documents\BowRobot\UR Files\Code"
-
 # Program Parameters
 current_string = "E"  # G, D, A, E
 start_pos = "frog"    # frog, middle, tip
@@ -58,8 +50,9 @@ home_joints = [0.00, -90.00, -60.00, -120.00, 90.00, 90.00]
 
 # Calibration
 import calibration_data
+import config
 
-if simulation:
+if config.simulation:
     data = calibration_data.simulation
 else:
     data = calibration_data.real

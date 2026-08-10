@@ -1,6 +1,7 @@
 import numpy as np
 from pprint import pformat
 import sys
+import arm_control.arm_config as arm_config
 import config
 import user_interface as user
 import calibration_data as cal
@@ -143,7 +144,7 @@ while True:
             continue
 
     # Read Robot Position
-    if config.simulation:
+    if arm_config.simulation:
         joints = robot.Joints().list()
         pose = Pose_2_TxyzRxyz(robot.Pose())
     else:

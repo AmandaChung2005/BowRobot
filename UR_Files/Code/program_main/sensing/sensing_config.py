@@ -1,5 +1,4 @@
 # DAQ Settings
-
 device = "Dev1"
 sample_rate = 4800
 default_duration = 0.1

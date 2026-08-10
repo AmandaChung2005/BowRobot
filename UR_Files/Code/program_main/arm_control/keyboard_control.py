@@ -4,6 +4,7 @@ from pynput.keyboard import Key, Listener
 import time
 import numpy as np
 from scipy.spatial.transform import Rotation
+import arm_control.arm_config as arm_config
 import config
 import robot_interface as robot
 

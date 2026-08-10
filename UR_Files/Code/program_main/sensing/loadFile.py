@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-import config
+import sensing.sensing_config as sensing_config
 import plotting as plot
 
 while True:
@@ -11,8 +11,8 @@ while True:
 
     if filename.lower() == "list":
         files = sorted(
-            f[:-4] for f in os.listdir(config.save_folder)
-            if f.endswith(config.file_extension)
+            f[:-4] for f in os.listdir(sensing_config.save_folder)
+            if f.endswith(sensing_config.file_extension)
         )
 
         if len(files) == 0:
@@ -26,7 +26,7 @@ while True:
 
         continue
 
-    filepath = os.path.joint(config.save_folder, filename = config.file_extension)
+    filepath = os.path.joint(sensing_config.save_folder, filename = sensing_config.file_extension)
 
     if os.path.exists(filepath):
         break

@@ -5,7 +5,7 @@ from nidaqmx.constants import AcquisitionType, Coupling, ExcitationSource
 from nidaqmx.system import System
 import os
 
-import config
+import sensing.sensing_config as sensing_config
 import plotting as plot
 
 class SensorDAQ:
@@ -17,22 +17,22 @@ class SensorDAQ:
 
         channels = []
 
-        accel = config.sensors["TriAccelerometer"]
+        accel = sensing_config.sensors["TriAccelerometer"]
 
-        for axis, physical_channel in config.daq_channels["TriAccelerometer"].items():
+        for axis, physical_channel in sensing_config.daq_channels["TriAccelerometer"].items():
             channels.append({
                 "physical_channel": physical_channel,
                 "name": f"Accel_{axis.upper()}",
                 "sensor": accel
             })
 
-        for sensor_name, physical_channel in config.daq_channels.items():
+        for sensor_name, physical_channel in sensing_config.daq_channels.items():
             if sensor_name == "TriAccelerometer":
                 continue
             channels.append({
                 "physical_channel": physical_channel,
                 "name": sensor_name,
-                "sensor": config.sensors[sensor_name]
+                "sensor": sensing_config.sensors[sensor_name]
             })
 
         channels.sort(
@@ -41,7 +41,7 @@ class SensorDAQ:
 
         for ch in channels:
             channel = self.task.ai_channels.add_ai_voltage_chan(
-                f"{config.device}/{ch['physical_channel']}",
+                f"{sensing_config.device}/{ch['physical_channel']}",
                 name_to_assign_to_channel = ch["name"]
             )
 
@@ -70,18 +70,18 @@ class SensorDAQ:
 
         print()
 
-        if config.device in [device.name for device in devices]:
-            print(f"Successfully connected to {config.device}")
+        if sensing_config.device in [device.name for device in devices]:
+            print(f"Successfully connected to {sensing_config.device}")
             return True
 
-        print(f"{config.device} was not found")
+        print(f"{sensing_config.device} was not found")
         return False
 
-    def read(self, seconds = config.default_duration):
-        samples = int(seconds * config.sample_rate)
+    def read(self, seconds = sensing_config.default_duration):
+        samples = int(seconds * sensing_config.sample_rate)
 
         self.task.timing.cfg_samp_clk_timing(
-            rate = config.sample_rate,
+            rate = sensing_config.sample_rate,
             sample_mode = AcquisitionType.FINITE,
             samps_per_chan = samples
         )
@@ -92,22 +92,22 @@ class SensorDAQ:
             )
         )
 
-        time = np.arange(samples)/config.sample_rate
+        time = np.arange(samples)/sensing_config.sample_rate
 
         return time, data       
 
     def get_save_name(self):
-        os.makedirs(config.save_folder, exist_ok = True)
+        os.makedirs(sensing_config.save_folder, exist_ok = True)
 
         index = 0
 
         while True:
             if index == 0:
-                suggested = config.save_name
+                suggested = sensing_config.save_name
             else:
-                suggested = f"{config.save_name}_{index:03d}"
+                suggested = f"{sensing_config.save_name}_{index:03d}"
 
-            filepath = os.path.join(config.save_folder, suggested + config.file_extension)
+            filepath = os.path.join(sensing_config.save_folder, suggested + sensing_config.file_extension)
 
             if not os.path.exists(filepath):
                 break
@@ -123,7 +123,7 @@ class SensorDAQ:
             if response == "":
                 return suggested
 
-            filepath = os.path.join(config.save_folder, response + config.file_extension)
+            filepath = os.path.join(sensing_config.save_folder, response + sensing_config.file_extension)
 
             if os.path.exists(filepath):
                 overwrite = input(
@@ -145,13 +145,13 @@ class SensorDAQ:
     def save(self, filename, time, data):
         filename = self.get_save_name()
 
-        filepath = os.path.join(config.save_folder, filename + config.file_extension)
+        filepath = os.path.join(sensing_config.save_folder, filename + sensing_config.file_extension)
 
         np.savez(
             filepath,
             time = time,
             data = data,
-            sample_rate = config.sample_rate,
+            sample_rate = sensing_config.sample_rate,
             channel_names = [channel.name for channel in self.task.ai_channels]
         )
 

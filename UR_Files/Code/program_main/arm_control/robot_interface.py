@@ -1,6 +1,7 @@
 import sys
+import arm_control.arm_config as arm_config
 import config
-cal = config.data
+cal = arm_config.data
 
 # Initialization (Simulation vs Reality)
 if config.simulation:
@@ -17,10 +18,10 @@ else:
     from rtde_control import RTDEControlInterface
     from rtde_receive import RTDEReceiveInterface
     rtde_c = RTDEControlInterface(
-        config.arm_ip,
+        config.host_ip,
         RTDEControlInterface.FLAG_USE_EXT_UR_CAP
         )
-    rtde_r = RTDEReceiveInterface(config.arm_ip)
+    rtde_r = RTDEReceiveInterface(config.host_ip)
 
 # Motion control
 def moveJ(joints, speed, acceleration):
@@ -31,8 +32,8 @@ def moveJ(joints, speed, acceleration):
         
     if config.simulation:
         robot.setSpeed(
-            speed_linear = config.speed*1000,
-            accel_linear = config.acceleration*1000,
+            speed_linear = arm_config.speed*1000,
+            accel_linear = arm_config.acceleration*1000,
             speed_joints = np.degrees(speed),
             accel_joints = np.degrees(acceleration)
         )
@@ -115,11 +116,11 @@ def servoL(pose, speed, acceleration, dt, lookahead_time, gain):
 
         rtde_c.servoL(
             pose,
-            config.bow_speed,
-            config.bow_acceleration,
-            config.dt,
-            config.lookahead_time,
-            config.gain
+            arm_config.bow_speed,
+            arm_config.bow_acceleration,
+            arm_config.dt,
+            arm_config.lookahead_time,
+            arm_config.gain
         )
 
 # Cartesian Jogging
@@ -136,22 +137,22 @@ def jogCartesian(selection_vector, wrench):
         motion = ""
 
         if selection_vector[0]:
-            dx = np.sign(wrench[0]) * config.step_xyz
+            dx = np.sign(wrench[0]) * arm_config.step_xyz
             motion += "+X " if dx >0 else "-X "
         if selection_vector[1]:
-            dy = np.sign(wrench[1]) * config.step_xyz
+            dy = np.sign(wrench[1]) * arm_config.step_xyz
             motion += "+Y " if dy >0 else "-Y "
         if selection_vector[2]:
-            dz =  np.sign(wrench[2]) * config.step_xyz
+            dz =  np.sign(wrench[2]) * arm_config.step_xyz
             motion += "+Z " if dz >0 else "-Z "
         if selection_vector[3]:
-            rx = np.sign(wrench[3]) * config.step_rot
+            rx = np.sign(wrench[3]) * arm_config.step_rot
             motion += "+Roll " if rx >0 else "-Roll "
         if selection_vector[4]:
-            ry = np.sign(wrench[4]) * config.step_rot
+            ry = np.sign(wrench[4]) * arm_config.step_rot
             motion += "+Pitch " if ry >0 else "-Pitch "
         if selection_vector[5]:
-            rz = np.sign(wrench[5]) * config.step_rot
+            rz = np.sign(wrench[5]) * arm_config.step_rot
             motion += "+Yaw " if rz >0 else "-Yaw "
         
         motion = motion.strip()
@@ -177,7 +178,7 @@ def forceMode(task_frame, selection_vector, wrench, limits):
         task_frame,
         selection_vector,
         wrench,
-        config.force_type,
+        arm_config.force_type,
         limits
     )
 
@@ -292,8 +293,8 @@ def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
 
         moveL(
             end_pose.tolist(),
-            config.bow_speed,
-            config.bow_acceleration
+            arm_config.bow_speed,
+            arm_config.bow_acceleration
         )
 
     else:
@@ -308,18 +309,18 @@ def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
 
             servoL(
                 pose.tolist(),
-                config.bow_speed,
-                config.bow_acceleration,
-                config.dt,
-                config.lookahead_time,
-                config.gain
+                arm_config.bow_speed,
+                arm_config.bow_acceleration,
+                arm_config.dt,
+                arm_config.lookahead_time,
+                arm_config.gain
             )
 
             forceMode(
-                config.task_frames[config.current_string],
-                config.selection_vector,
-                config.wrench,
-                config.limits
+                arm_config.task_frames[arm_config.current_string],
+                arm_config.selection_vector,
+                arm_config.wrench,
+                arm_config.limits
             )
         
             waitPeriod(t_start)

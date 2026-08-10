@@ -3,13 +3,13 @@ import sys
 import time
 
 import config
-sys.path.append(config.code_path)
 
-import path_planner as path
-import robot_interface as robot
-import user_interface as user
+from . import arm_config
+from . import path_planner as path
+from . import robot_interface as robot
+from . import user_interface as user
 
-cal = config.data
+cal = arm_config.data
 
 # Start User Interface
 user.start_interface()
@@ -20,9 +20,9 @@ user.wait_for_enter("Program Started")
 user.wait_for_enter("Move to Home")
 
 robot.moveJ(
-    config.home_joints,
-    config.joint_speed,
-    config.joint_acceleration
+    arm_config.home_joints,
+    arm_config.joint_speed,
+    arm_config.joint_acceleration
 )
 
 time.sleep(0.02)
@@ -40,13 +40,13 @@ while True:
         user.wait_for_enter("Move Above Rosin")
         hover_tip = path.lift_pose(
             cal["rosin_position"]["tip"],
-            config.rosin_hover
+            arm_config.rosin_hover
         )
 
         robot.moveL(
             hover_tip,
-            config.speed,
-            config.acceleration
+            arm_config.speed,
+            arm_config.acceleration
         )
 
         while True:
@@ -54,20 +54,20 @@ while True:
 
             robot.moveJ(
                 cal["rosin_joints"]["tip"],
-                config.speed,
-                config.acceleration
+                arm_config.speed,
+                arm_config.acceleration
             )
 
             robot.forceMode(
-                config.rosin_task_frame,
-                config.rosin_selection_vector,
-                config.rosin_wrench,
-                config.rosin_limits
+                arm_config.rosin_task_frame,
+                arm_config.rosin_selection_vector,
+                arm_config.rosin_wrench,
+                arm_config.rosin_limits
             )
 
             user.wait_for_enter("Rosin Bow")
 
-            for _ in range(config.rosin_cycles):
+            for _ in range(arm_config.rosin_cycles):
                     robot.bowing_segment(
                         cal["rosin_position"]["tip"],
                         cal["rosin_position"]["frog"],
@@ -88,8 +88,8 @@ while True:
 
             robot.moveL(
                 hover_tip,
-                config.speed,
-                config.acceleration
+                arm_config.speed,
+                arm_config.acceleration
             )
 
             if user.yes_no("\nEnough Rosin(y/n)? "):
@@ -102,8 +102,8 @@ while True:
 
             robot.moveJ(
                 cal["violin_hover_joints"],
-                config.speed,
-                config.acceleration
+                arm_config.speed,
+                arm_config.acceleration
             )
 
 
@@ -117,14 +117,14 @@ while True:
             if start_pos == "middle":
                 robot.moveJ(
                     robot.get_middle_joints(current_string),
-                    config.speed,
-                    config.acceleration
+                    arm_config.speed,
+                    arm_config.acceleration
                 )
             else:
                 robot.moveJ(
                     cal["joint_paths"][current_string][start_pos],
-                    config.speed,
-                    config.acceleration
+                    arm_config.speed,
+                    arm_config.acceleration
                 )
 
             # Basic Bowing
@@ -135,7 +135,7 @@ while True:
                 start_pos
             )
 
-            for _ in range(config.bowing_cycles):
+            for _ in range(arm_config.bowing_cycles):
                 for i in range(len(basic_cartesian_path)-1):
 
                     robot.bowing_segment(
@@ -157,21 +157,21 @@ while True:
 
             robot.moveJ(
                 spiccato_joint_path[0],
-                config.speed,
-                config.acceleration
+                arm_config.speed,
+                arm_config.acceleration
             )
 
             # print("\nMoving...")
             # robot.moveJ(
-            #     cal["joint_paths"][config.current_string]["frog"],
-            #     config.speed,
-            #     config.acceleration
+            #     cal["joint_paths"][arm_config.current_string]["frog"],
+            #     arm_config.speed,
+            #     arm_config.acceleration
             # )
 
             # Spiccato Bowing
             user.wait_for_enter("Start Bowing")
 
-            for _ in range(config.spiccato_cycles):
+            for _ in range(arm_config.spiccato_cycles):
                 for i in range(len(spiccato_cartesian_path) -1):
                     robot.bowing_segment(
                         spiccato_cartesian_path[i],
@@ -188,8 +188,8 @@ while True:
 
         robot.moveJ(
             cal["violin_hover_joints"],
-            config.speed,
-            config.acceleration
+            arm_config.speed,
+            arm_config.acceleration
         )
 
         at_violin_hover = True
@@ -198,9 +198,9 @@ while True:
         user.wait_for_enter("Return Home")
 
         robot.moveJ(
-            config.home_joints,
-            config.joint_speed,
-            config.joint_acceleration
+            arm_config.home_joints,
+            arm_config.joint_speed,
+            arm_config.joint_acceleration
         )
 
         print("\nProgram Complete")

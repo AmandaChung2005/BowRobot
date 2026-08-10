@@ -1,7 +1,10 @@
 import numpy as np
+
 import config
-import calibration_data as cal
-import robot_interface as robot
+
+from . import arm_config
+from . import calibration_data as cal
+from . import robot_interface as robot
 
 if config.simulation:
     cal = cal.simulation
@@ -36,12 +39,12 @@ def basic(current_string, start_pos):
         
     elif start_pos == "middle":
 
-        if config.start_dir == "upbow":
+        if arm_config.start_dir == "upbow":
 
             basic_cartesian_path = [middle_pose, frog_pose, tip_pose, middle_pose]
             joint_names = ["middle", "frog", "tip", "middle"]
             
-        elif config.start_dir == "downbow":
+        elif arm_config.start_dir == "downbow":
 
             basic_cartesian_path = [middle_pose, tip_pose, frog_pose, middle_pose]
             joint_names = ["middle", "tip", "frog", "middle"]
@@ -79,7 +82,7 @@ def spiccato(current_string):
 
     frog_middle_distance = np.linalg.norm(middle[:3] - frog[:3])
 
-    offset = min(config.spiccato_offset, frog_middle_distance)
+    offset = min(arm_config.spiccato_offset, frog_middle_distance)
 
     segment = middle[:3] - frog[:3]
     segment /= frog_middle_distance
@@ -88,7 +91,7 @@ def spiccato(current_string):
     start[:3] += segment * offset
 
     end = start.copy()
-    end[:3] += segment * config.spiccato_length
+    end[:3] += segment * arm_config.spiccato_length
 
     # Spiccato Around Middle
     # half_length = config.spiccato_length/2
@@ -100,12 +103,12 @@ def spiccato(current_string):
     # end[:3] += direction * half_length
 
     lift_start = np.array(
-        lift_pose(start, config.spiccato_height),
+        lift_pose(start, arm_config.spiccato_height),
         dtype = float
     )
 
     lift_end = np.array(
-        lift_pose(end, config.spiccato_height),
+        lift_pose(end, arm_config.spiccato_height),
         dtype = float
     )
 

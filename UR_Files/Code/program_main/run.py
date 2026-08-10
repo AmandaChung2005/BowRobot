@@ -4,10 +4,10 @@ from pathlib import Path
 code_path = Path(__file__).parent/"arm control"
 sys.path.append(str(code_path))
 
-import robot_interface
+import arm_control.robot_interface
 import config
 
 if config.setup:
-    import calibration
+    import arm_control.calibration
 else:
-    import main
+    import arm_control.main
