@@ -2,12 +2,10 @@
 import sys
 import time
 
-import config
-
-from . import arm_config
-from . import path_planner as path
-from . import robot_interface as robot
-from . import user_interface as user
+import arm_control.arm_config as arm_config
+import arm_control.path_planner as path
+import arm_control.robot_interface as robot
+import arm_control.user_interface as user
 
 cal = arm_config.data
 
@@ -30,14 +28,13 @@ time.sleep(0.02)
 at_violin_hover = False
 
 while True:
-
     # Select Bowing Type
     bow = user.select_bowing_type()
 
 
     if bow == "rosin":
-        
         user.wait_for_enter("Move Above Rosin")
+
         hover_tip = path.lift_pose(
             cal["rosin_position"]["tip"],
             arm_config.rosin_hover
@@ -49,51 +46,43 @@ while True:
             arm_config.acceleration
         )
 
-        while True:
-            user.wait_for_enter("Move Onto Rosin")
+        user.wait_for_enter("Move Onto Rosin")
 
-            robot.moveJ(
-                cal["rosin_joints"]["tip"],
-                arm_config.speed,
-                arm_config.acceleration
+        robot.moveJ(
+            cal["rosin_joints"]["tip"],
+            arm_config.joint_speed,
+            arm_config.joint_acceleration
+        )
+
+        user.wait_for_enter("Rosin Bow")
+
+        for _ in range(arm_config.rosin_cycles):
+            robot.bowing_segment(
+                cal["rosin_position"]["tip"],
+                cal["rosin_position"]["frog"],
+                cal["rosin_position"]["tip"],
+                cal["rosin_position"]["frog"]
             )
 
-            robot.forceMode(
-                arm_config.rosin_task_frame,
-                arm_config.rosin_selection_vector,
-                arm_config.rosin_wrench,
-                arm_config.rosin_limits
+            robot.bowing_segment(
+                cal["rosin_position"]["frog"],
+                cal["rosin_position"]["tip"],
+                cal["rosin_position"]["frog"],
+                cal["rosin_position"]["tip"]
             )
-
-            user.wait_for_enter("Rosin Bow")
-
-            for _ in range(arm_config.rosin_cycles):
-                    robot.bowing_segment(
-                        cal["rosin_position"]["tip"],
-                        cal["rosin_position"]["frog"],
-                        cal["rosin_position"]["tip"],
-                        cal["rosin_position"]["frog"]
-                    )
-
-                    robot.bowing_segment(
-                        cal["rosin_position"]["frog"],
-                        cal["rosin_position"]["tip"],
-                        cal["rosin_position"]["frog"],
-                        cal["rosin_position"]["tip"]
-                    )
 
             robot.stop()
 
-            user.wait_for_enter("Lift Bow")
+        user.wait_for_enter("Lift Bow")
 
-            robot.moveL(
-                hover_tip,
-                arm_config.speed,
-                arm_config.acceleration
-            )
+        robot.moveL(
+            hover_tip,
+            arm_config.speed,
+            arm_config.acceleration
+        )
 
-            if user.yes_no("\nEnough Rosin(y/n)? "):
-                break
+        if user.yes_no("\nEnough Rosin(y/n)? "):
+            break
 
     elif bow in ("basic", "spiccato"):
         # Move to Above String
@@ -151,9 +140,7 @@ while True:
             # Move onto String Position
             user.wait_for_enter("Move Onto String")          
 
-            spiccato_cartesian_path, spiccato_joint_path = path.spiccato(
-                current_string
-            )
+            spiccato_cartesian_path, spiccato_joint_path = path.spiccato(current_string)
 
             robot.moveJ(
                 spiccato_joint_path[0],

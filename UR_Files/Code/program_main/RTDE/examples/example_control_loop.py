@@ -23,24 +23,31 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import sys
+from pathlib import Path
 
 sys.path.append("..")
 import logging
 
+program_main_path = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(program_main_path))
+
+import config
+
+rtde_path = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(rtde_path))
+
+
 import rtde.rtde as rtde
 import rtde.rtde_config as rtde_config
-
-from pathlib import Path
-
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-import config
 
 
 # logging.basicConfig(level=logging.INFO)
 
-ROBOT_HOST = config.host_ip
+ROBOT_HOST = '192.168.56.101'
 ROBOT_PORT = 30004
-config_filename = "control_loop_configuration.xml"
+
+base_dir = Path(__file__).resolve().parent.parent/"code"
+config_filename = base_dir/"control_loop_configuration.xml"
 
 keep_running = True
 
@@ -75,51 +82,54 @@ setp.input_double_register_5 = 0
 
 # The function "rtde_set_watchdog" in the "rtde_control_loop.urp" creates a 1 Hz watchdog
 watchdog.input_int_register_0 = 0
+watchdog.input_int_register_1 = 0
+watchdog.input_int_register_2 = 0
 
 
 def setp_to_list(sp):
     sp_list = []
-    for i in range(0, 6):
-        sp_list.append(sp.__dict__["input_double_register_%i" % i])
-    return sp_list
+        for i in range(0, 6):
+                sp_list.append(sp.__dict__["input_double_register_%i" % i])
+                    return sp_list
 
 
-def list_to_setp(sp, list):
-    for i in range(0, 6):
-        sp.__dict__["input_double_register_%i" % i] = list[i]
-    return sp
+                    def list_to_setp(sp, list):
+                        for i in range(0, 6):
+                                sp.__dict__["input_double_register_%i" % i] = list[i]
+                                    return sp
 
 
-# start data synchronization
-if not con.send_start():
-    sys.exit()
+                                    # start data synchronization
+                                    if not con.send_start():
+                                        sys.exit()
 
-# control loop
-move_completed = True
-while keep_running:
-    # receive the current state
-    state = con.receive()
+                                        # control loop
+                                        move_completed = True
+                                        while keep_running:
+                                            # receive the current state
+                                                state = con.receive()
 
-    if state is None:
-        break
+                                                    if state is None:
+                                                            break
 
-    # do something...
-    if move_completed and state.output_int_register_0 == 1:
-        move_completed = False
-        new_setp = setp1 if setp_to_list(setp) == setp2 else setp2
-        list_to_setp(setp, new_setp)
-        print("New pose = " + str(new_setp))
-        # send new setpoint
-        con.send(setp)
-        watchdog.input_int_register_0 = 1
-    elif not move_completed and state.output_int_register_0 == 0:
-        print("Move to confirmed pose = " + str(state.target_q))
-        move_completed = True
-        watchdog.input_int_register_0 = 0
+                                                                # do something...
+                                                                    if move_completed and state.output_int_register_0 == 1:
+                                                                            move_completed = False
+                                                                                    new_setp = setp1 if setp_to_list(setp) == setp2 else setp2
+                                                                                            list_to_setp(setp, new_setp)
+                                                                                                    print("New pose = " + str(new_setp))
+                                                                                                            # send new setpoint
+                                                                                                                    con.send(setp)
+                                                                                                                            watchdog.input_int_register_0 = 1
+                                                                                                                                elif not move_completed and state.output_int_register_0 == 0:
+                                                                                                                                        print("Move to confirmed pose = " + str(state.target_q))
+                                                                                                                                                move_completed = True
+                                                                                                                                                        watchdog.input_int_register_0 = 0
 
-    # kick watchdog
-    con.send(watchdog)
+                                                                                                                                                            # kick watchdog
+                                                                                                                                                                con.send(watchdog)
 
-con.send_pause()
+                                                                                                                                                                con.send_pause()
 
-con.disconnect()
+                                                                                                                                                                con.disconnect()
+                                                                                                                                                                

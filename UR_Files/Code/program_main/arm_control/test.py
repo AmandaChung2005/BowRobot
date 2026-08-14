@@ -1,45 +1,17 @@
-from rtde_control import RTDEControlInterface
-from rtde_receive import RTDEReceiveInterface
-import time
+import socket
 
 ROBOT_IP = "192.168.56.101"
+ROBOT_PORT = 30004
 
-print("Connecting to robot...")
+print(f"Connecting to {ROBOT_IP}:{ROBOT_PORT}...")
 
-rtde_c = RTDEControlInterface(ROBOT_IP)
-rtde_r = RTDEReceiveInterface(ROBOT_IP)
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(10)
 
-print("Control connected:", rtde_c.isConnected())
-
-# Read current joint position
-q = rtde_r.getActualQ()
-
-print("Current joints:")
-print(q)
-
-# Move joint 1 by only 0.05 radians (~2.9 degrees)
-target = q.copy()
-target[0] += 0.05
-
-print("\nTarget joints:")
-print(target)
-
-print("\nMoving...")
-result = rtde_c.moveJ(
-    target,
-    0.1,   # velocity
-    0.1    # acceleration
-)
-
-print("moveJ returned:", result)
-
-time.sleep(1)
-
-print("\nFinal joints:")
-print(rtde_r.getActualQ())
-
-rtde_c.stopScript()
-rtde_c.disconnect()
-rtde_r.disconnect()
-
-print("Done.")
+try:
+    sock.connect((ROBOT_IP, ROBOT_PORT))
+    print("TCP CONNECTION SUCCESSFUL")
+except Exception as e:
+    print(f"TCP CONNECTION FAILED: {type(e).__name__}: {e}")
+finally:
+    sock.close()

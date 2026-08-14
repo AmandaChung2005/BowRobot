@@ -1,14 +1,14 @@
 import numpy as np
 from pprint import pformat
 import sys
-import arm_control.arm_config as arm_config
+
 import config
-import user_interface as user
-import calibration_data as cal
+import run
+
+import arm_control.calibration_data as cal
 
 # Read Robot
-
-if config.simulation:
+if run.simulation:
     from robodk.robolink import Robolink, ITEM_TYPE_ROBOT
     from robodk.robomath import Pose_2_TxyzRxyz
 
@@ -21,12 +21,12 @@ if config.simulation:
 else:
     import rtde_receive
 
-    rtde_r = rtde_receive.RTDEReceiveInterface(config.arm_ip)
+    rtde_r = rtde_receive.RTDEReceiveInterface(config.host_ip)
 
 
 while True:
     # Choose Calibration
-    if config.simulation:
+    if run.simulation:
         data = cal.simulation
         section = "simulation"
     else:
@@ -144,18 +144,20 @@ while True:
             continue
 
     # Read Robot Position
-    if arm_config.simulation:
+    if run.simulation:
         joints = robot.Joints().list()
         pose = Pose_2_TxyzRxyz(robot.Pose())
     else:
         joints = np.degrees(rtde_r.getActualQ()).tolist()
-        pose = rtde_r.getActualTCPPose()
 
+        pose = list(rtde_r.getActualTCPPose())
+        
         pose[0] *= 1000
         pose[1] *= 1000
         pose[2] *= 1000
         pose [3:] = np.degrees(pose[3:])
-        pose = pose.tolist()
+
+        pose = [float(x) for x in pose]
 
     # Confirmation
     print("\n")

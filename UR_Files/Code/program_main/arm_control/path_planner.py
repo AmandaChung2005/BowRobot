@@ -1,23 +1,38 @@
 import numpy as np
 
-import config
+import run
 
 from . import arm_config
 from . import calibration_data as cal
 from . import robot_interface as robot
 
-if config.simulation:
+if run.simulation:
     cal = cal.simulation
 else:
     cal = cal.real
 
 # Lift Pose
 def lift_pose(pose, height):
-    pose = np.array(pose, dtype=float)
-    lift = pose.copy()
+    pose = np.asarray(pose, dtype = float).copy()
 
-    lift[2] += height
-    return lift.tolist()
+    if pose.shape != (6,):
+        raise ValueError(
+            f"Expected a 6 Value Pose, Got Shape {pose.shape}: {pose}"
+        )
+
+    pose[2] += height
+
+    return pose.tolist()
+
+    # lift = np.asarray(pose, dtype = float).copy()
+    # if lift.shape != (6,):
+    #     raise ValueError(
+    #         f"Expected a 6 Value Pose, Got Shape {lift.shape}: {pose}"
+    #     )
+
+    # lift[2] += float(height)
+
+    # return lift.tolist()
 
 # Basic Up and Down Bows
 def basic(current_string, start_pos):
@@ -92,15 +107,6 @@ def spiccato(current_string):
 
     end = start.copy()
     end[:3] += segment * arm_config.spiccato_length
-
-    # Spiccato Around Middle
-    # half_length = config.spiccato_length/2
-
-    # start = middle.copy()
-    # start[:3] -= direction * half_length
-
-    # end = middle.copy()
-    # end[:3] += direction * half_length
 
     lift_start = np.array(
         lift_pose(start, arm_config.spiccato_height),
