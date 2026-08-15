@@ -150,9 +150,8 @@ class RTDEInterface:
             if not self.con.send(self.watchdog):
                 raise RuntimeError("Failed to Send Initial Watchdog")
 
-        print("Initial Watchdog Sent")
-
         self.start_heartbeat()
+        print("Initial Watchdog Sent")
 
     def start_heartbeat(self):
         self.heartbeat_stop.clear()
@@ -171,8 +170,11 @@ class RTDEInterface:
                 if self.con is not None:
                     try:
                         self.con.send(self.watchdog)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"Heartbeat Error: {e}")
+                        self.heartbeat_stop.set()
+                        break
+
             time.sleep(period)
 
     def stop_heartbeat(self):
@@ -353,13 +355,15 @@ class RTDEInterface:
 
         target_rad = np.deg2rad(target)
 
-        error = np.linalg.norm(current - target_rad)
-        if error < np.deg2rad(0.5):
+        difference_deg = np.abs(
+            np.degrees(current) - target
+        )
+
+        if np.all(difference_deg < 1.0):
             print("Already at Target Joing Position")
             self.move_completed = True
             self.move_started = False
             return
-
 
         self.move_completed = False
         self.move_started = False
@@ -413,13 +417,13 @@ class RTDEInterface:
             current[:3] - target[:3]
         )
 
-        orientation_error = np.linalge.norm(
+        orientation_error = np.linalg.norm(
             current[3:] - target[3:]
         )
 
         if(
-            position_error < 0.5
-            and orientation_error < 0.5
+            position_error < 0.002
+            and orientation_error < np.deg2rad(2.0)
         ):
             print("Already at Target TCP Pose")
 
@@ -447,19 +451,20 @@ class RTDEInterface:
             if not self.con.send(self.watchdog):
                 raise RuntimeError("Failed to Reset Motion Mode")
 
-            time.sleep(0.1)
+        time.sleep(0.1)
 
-            with self.lock:
-                if not self.con.send(self.setp):
-                    raise RuntimeError("Failed to Send moveL Command")
+        with self.lock:
+            if not self.con.send(self.setp):
+                raise RuntimeError("Failed to Send moveL Command")
 
-                self.watchdog.input_int_register_0 = self.mode_movel
+        with self.lock:
+            self.watchdog.input_int_register_0 = self.mode_movel
 
-                if not self.con.send(self.watchdog):
-                    raise RuntimeError("Failed to Send moveL Command")
+            if not self.con.send(self.watchdog):
+                raise RuntimeError("Failed to Send moveL Command")
 
-            print("moveL Command Sent")
-            self.wait_for_move()
+        print("moveL Command Sent")
+        self.wait_for_move()
 
     def servoJ(
             self,

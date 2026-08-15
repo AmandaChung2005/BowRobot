@@ -1,12 +1,12 @@
 import numpy as np
 
-import run
+import config
 
 from . import arm_config
 from . import calibration_data as cal
 from . import robot_interface as robot
 
-if run.simulation:
+if config.simulation:
     cal = cal.simulation
 else:
     cal = cal.real

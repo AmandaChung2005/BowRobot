@@ -91,6 +91,18 @@ def select_start_position():
 
         print("Invalid position, try again")
 
+def select_start_direction():
+    while True:
+        direction = input("Select Start Direction (Upbow/Downbow): ").strip().lower()
+
+        if direction in ("u", "upbow"):
+            return "upbow"
+
+        if direction in ("d", "downbow"):
+            return "downbow"
+
+        print("Invalid Direction. Please Enter 'Upbow' or 'Downbow'")
+
 def select_bowing_type():
     while True:
         bow = safe_input(

@@ -1,3 +1,8 @@
+# Settings
+simulation = False   # True = RoboDK, False = Real UR7e
+setup = False        # True = Get Coordinates, False = Run Program
+
+
 robotName = "UR7e"
 host_ip = "192.168.56.101"
 

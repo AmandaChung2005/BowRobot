@@ -61,9 +61,9 @@ limits = [
 
 # Calibration
 import arm_control.calibration_data as calibration_data
-import run
+import config
 
-if run.simulation:
+if config.simulation:
     data = calibration_data.simulation
     home_position = [439.398, -133.300, 484.025, 0.000, 180.000, 0.000]   # mm
     home_joints = [0.00, -90.00, -60.00, -120.00, 90.00, 90.00]           # deg
@@ -80,6 +80,7 @@ rosin_joints = data["rosin_joints"]
 
 string_paths = data["string_paths"]
 joint_paths = data["joint_paths"]
+
 
 task_frames = {
     string: poses["frog"]

@@ -1,17 +1,33 @@
-import socket
+import time
+import numpy as np
+import sys
+from pathlib import Path
 
-ROBOT_IP = "192.168.56.101"
-ROBOT_PORT = 30004
+project_path = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_path))
 
-print(f"Connecting to {ROBOT_IP}:{ROBOT_PORT}...")
+import config
+import arm_control.robot_interface as robot
+import arm_control.arm_config as arm_config
 
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.settimeout(10)
+print("RTDE connected:", robot.isConnected())
 
-try:
-    sock.connect((ROBOT_IP, ROBOT_PORT))
-    print("TCP CONNECTION SUCCESSFUL")
-except Exception as e:
-    print(f"TCP CONNECTION FAILED: {type(e).__name__}: {e}")
-finally:
-    sock.close()
+current = robot.getCurrentJoints()
+
+print("Current joints:")
+print(np.degrees(current))
+
+target = np.array(arm_config.home_joints, dtype=float)
+
+print("\nHome target:")
+print(target)
+
+print("\nMoving to home...")
+
+robot.moveJ(
+    target,
+    arm_config.joint_speed,
+    arm_config.joint_acceleration
+)
+
+print("DONE")

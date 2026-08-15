@@ -2,14 +2,13 @@ import sys
 import numpy as np
 
 import config
-import run
 import arm_control.arm_config as arm_config
 import arm_control.calibration_data as cal
 import RTDE.code.control_loop as control_loop
 
 
 # Initialization (Simulation vs Reality)
-if run.simulation:
+if config.simulation:
     sys.path.append(config.robodk_python_path)
 
     from robodk.robolink import Robolink, ITEM_TYPE_ROBOT
@@ -27,9 +26,9 @@ def moveJ(joints, speed, acceleration):
     if hasattr(joints, "tolist"):
         joints = joints.tolist()
 
-    target = np.array(joints, dtype = float)
+    target_deg = np.asarray(joints, dtype = float)
         
-    if run.simulation:
+    if config.simulation:
         robot.setSpeed(
             speed_linear = arm_config.speed*1000,
             accel_linear = arm_config.acceleration*1000,
@@ -39,27 +38,33 @@ def moveJ(joints, speed, acceleration):
 
         current = np.array(robot.Joints().list(), dtype = float)
 
-        if np.linalg.norm(current - target) < 0.1:
+        if np.linalg.norm(current - target_deg) < 0.1:
             print("Already at Target Joint Position")
             return
     
-        robot.MoveJ(joints, blocking=True)
+        robot.MoveJ(target_deg.tolist(), blocking=True)
 
     else:
         current = np.array(rtde.getActualQ(), dtype = float)
 
-        target_rad = np.deg2rad(target)
-        error = np.linalg.norm(current-target_rad)
-        print(f"Joint Error: {np.degrees(error): .3f} degrees")
+        print("\n--- moveJ Debug ---")
+        print("Current joints (deg):", np.degrees(current))
+        print("Target joints (deg): ", target_deg)
 
-        if error < np.deg2rad(0.5):
+        difference = np.degrees(current) - target_deg
+        error = np.linalg.norm(current - np.deg2rad(target_deg))
+
+        print("Joint differences (deg):", difference)
+        print("Joint error (deg):", np.degrees(error))
+
+        if error < np.deg2rad(2.0):
             print("Already at Target Joint Position")
             return
 
         print("Sending moveJ...")
 
         rtde.moveJ(
-            target_rad.tolist(),
+            target_deg.tolist(),
             speed,
             acceleration
         )
@@ -68,12 +73,10 @@ def moveJ(joints, speed, acceleration):
         print("moveJ Complete")
 
 def moveL(pose, speed, acceleration):
-    print("\nMoving...")
+    if hasattr(pose, "tolist"):
+        pose = pose.tolist()
 
-    if run.simulation:
-        if hasattr(pose, "tolist"):
-            pose = pose.tolist()
-
+    if config.simulation:
         if isinstance(pose, list) and len(pose) == 16:
             rdk_pose = Mat([
                 pose[0:4],
@@ -98,10 +101,8 @@ def moveL(pose, speed, acceleration):
         pose_array[:3] /= 1000.0
         pose_array[3:6] = np.deg2rad(pose_array[3:6])
 
-        pose_ur = pose_array.tolist()
-
         rtde.moveL(
-            pose_ur,
+            pose_array.tolist(),
             speed,
             acceleration
         )
@@ -114,7 +115,7 @@ def servoJ(joints,speed, acceleration, dt, lookahead_time, gain):
     if hasattr(joints, "tolist"):
         joints = joints.tolist()
 
-    if run.simulation:
+    if config.simulation:
         target_pose = TxyzRxyz_2_Pose(joints)
         solutions = robot.SolveIK_All(target_pose)
         cols = len(solutions.Cols())
@@ -161,7 +162,7 @@ last_motion = None
 
 def jogCartesian(selection_vector, wrench):
     global last_motion
-    if run.simulation:
+    if config.simulation:
         pose = robot.Pose()
 
         dx = dy = dz = 0.0
@@ -205,7 +206,7 @@ def jogCartesian(selection_vector, wrench):
 
 # Force Control
 def forceMode(task_frame, selection_vector, wrench, limits):
-    if run.simulation:
+    if config.simulation:
         return
     rtde.set_force_parameters(
         task_frame,
@@ -218,69 +219,69 @@ def forceMode(task_frame, selection_vector, wrench, limits):
     rtde.set_force_mode(True)
 
 def forceModeStop():
-    if run.simulation:
+    if config.simulation:
         return
 
     rtde.set_force_mode(False)
 
 # Connection Utilities
 def isConnected():
-    if run.simulation:
+    if config.simulation:
         return True
     return rtde.isConnected()
 
 def reconnect():
-    if run.simulation:
+    if config.simulation:
         return True
     return rtde.reconnect()
 
 def disconnect():
-    if run.simulation:
+    if config.simulation:
         return
     rtde.disconnect()
 
 # Timing Utilities
 def initPeriod():
-    if run.simulation:
+    if config.simulation:
         return None
     return rtde.initPeriod()
 
 def waitPeriod(t_start):
-    if run.simulation:
+    if config.simulation:
         return
     rtde.waitPeriod(t_start)
 
 # Robot State
 def getActualTCPPose():
-    if run.simulation:
+    if config.simulation:
         return Pose_2_TxyzRxyz(robot.Pose())
     return rtde.getActualTCPPose()
 
 def getPose():
-    if run.simulation:
+    if config.simulation:
         return robot.Pose()
     return rtde.getActualTCPPose()
 
 def getJoints():
-    if run.simulation:
+    if config.simulation:
         return robot.Joints()
     return rtde.getActualQ()
 
 def getCurrentJoints():
-    if run.simulation:
+    if config.simulation:
         return np.array(robot.Joints().list(), dtype = float)
     else:
         return np.array(rtde.getActualQ(), dtype = float)
 
 # Robot Shutdown
 def stop():
-    if run.simulation:
+    if config.simulation:
         return
     rtde.stop()
 
 # Calculations
 def solveIK(pose, reference = None):
-    if run.simulation:
+    if config.simulation:
         if isinstance(pose, Mat):
             target_pose = pose
         else:
@@ -328,8 +329,19 @@ def get_middle_joints(string):
 
 
 # Motion Routines
-def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
-    if run.simulation:
+def bowing_segment(
+        start_pose,
+        end_pose,
+        start_joints,
+        end_joints,
+        halt=False,
+        rosin = False
+    ):
+
+    start_pose = np.asarray(start_pose, dtype = float)
+    end_pose = np.asarray(end_pose, dtype = float)
+
+    if config.simulation:
         if halt:
             stop()
             sys.exit()
@@ -342,12 +354,25 @@ def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
         )
 
     else:
-        forceMode(
-            arm_config.task_frames[arm_config.current_string],
-            arm_config.selection_vector,
-            arm_config.wrench,
-            arm_config.limits
-        )
+        if rosin:
+            task_frame = arm_config.rosin_task_frame
+            selection_vector = arm_config.rosin_selection_vector
+            wrench = arm_config.rosin_wrench
+            limits = arm_config.rosin_limits
+        else:
+            task_frame = arm_config.task_frames[
+                arm_config.current_string
+            ]
+            selection_vector = arm_config.selection_vector
+            wrench = arm_config.wrench
+            limits = arm_config.limits
+
+        # forceMode(
+        #     task_frame,
+        #     selection_vector,
+        #     wrench,
+        #     limits
+        # )
 
         for alpha in np.linspace(0.0, 1.0, 500):
             if halt:
@@ -356,9 +381,9 @@ def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
             
             t_start = initPeriod()
        
-            pose = (1-alpha)*start_pose+alpha*end_pose
+            pose = (1 - alpha) * start_pose + alpha * end_pose
 
-            joints = solveIK(pose)
+            joints = (1- - alpha) * np.asarray(start_joints) + alpha * np.asarray(end_joints)
 
             servoJ(
                 joints.tolist(),
@@ -371,9 +396,9 @@ def bowing_segment(start_pose, end_pose, start_joints, end_joints, halt=False):
         
             waitPeriod(t_start)
 
-        forceModeStop()
+        # forceModeStop()
 
 def getRobot():
-    if run.simulation:
+    if config.simulation:
         return robot
     return None

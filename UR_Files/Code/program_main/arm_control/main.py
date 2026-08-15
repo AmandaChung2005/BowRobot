@@ -61,14 +61,16 @@ while True:
                 cal["rosin_position"]["tip"],
                 cal["rosin_position"]["frog"],
                 cal["rosin_position"]["tip"],
-                cal["rosin_position"]["frog"]
+                cal["rosin_position"]["frog"],
+                rosin = True
             )
 
             robot.bowing_segment(
                 cal["rosin_position"]["frog"],
                 cal["rosin_position"]["tip"],
                 cal["rosin_position"]["frog"],
-                cal["rosin_position"]["tip"]
+                cal["rosin_position"]["tip"],
+                rosin = True
             )
 
             robot.stop()

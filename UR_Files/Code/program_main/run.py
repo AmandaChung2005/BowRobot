@@ -1,30 +1,30 @@
-# Settings
-simulation = False   # True = RoboDK, False = Real UR7e
-setup = False        # True = Get Coordinates, False = Run Program
-
 import sys
 from pathlib import Path
-
-import config
-
+import numpy as np
 
 project_path = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_path))
 
+import config
+
 print("Python Program Started")
 
 if config.setup:
-    print("Starting Calibration...")
+    print("\nStarting Calibration...")
     import arm_control.calibration
+    sys.exit()
+
 else:
-    print("Connecting to RTDE...")
-
     import arm_control.robot_interface as robot
+    print("RTDE Connected: ", robot.isConnected())
 
-    print("RTDE Connected, Watchdog Running")
-    print("Press PLAY on Polyscope")
-    input("Press ENTER after Polyscope is running: ")
+    if not config.simulation:
+        print("RTDE Heartbeat Started")
+   
+        print("\nPress PLAY on Polyscope")
+        input("Press ENTER after Polyscope is running: ")
 
+    print("\nStarting Main Program")
     import arm_control.main
 
 

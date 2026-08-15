@@ -3,12 +3,12 @@ from pprint import pformat
 import sys
 
 import config
-import run
 
 import arm_control.calibration_data as cal
 
 # Read Robot
-if run.simulation:
+
+if config.simulation:
     from robodk.robolink import Robolink, ITEM_TYPE_ROBOT
     from robodk.robomath import Pose_2_TxyzRxyz
 
@@ -26,7 +26,7 @@ else:
 
 while True:
     # Choose Calibration
-    if run.simulation:
+    if config.simulation:
         data = cal.simulation
         section = "simulation"
     else:
@@ -144,7 +144,7 @@ while True:
             continue
 
     # Read Robot Position
-    if run.simulation:
+    if config.simulation:
         joints = robot.Joints().list()
         pose = Pose_2_TxyzRxyz(robot.Pose())
     else:
