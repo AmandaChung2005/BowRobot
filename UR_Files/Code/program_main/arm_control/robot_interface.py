@@ -47,15 +47,8 @@ def moveJ(joints, speed, acceleration):
     else:
         current = np.array(rtde.getActualQ(), dtype = float)
 
-        print("\n--- moveJ Debug ---")
-        print("Current joints (deg):", np.degrees(current))
-        print("Target joints (deg): ", target_deg)
-
         difference = np.degrees(current) - target_deg
         error = np.linalg.norm(current - np.deg2rad(target_deg))
-
-        print("Joint differences (deg):", difference)
-        print("Joint error (deg):", np.degrees(error))
 
         if error < np.deg2rad(2.0):
             print("Already at Target Joint Position")
@@ -109,7 +102,7 @@ def moveL(pose, speed, acceleration):
 
         rtde.wait_for_move()
 
-def servoJ(joints,speed, acceleration, dt, lookahead_time, gain):
+def servoJ(joints,acceleration, velocity, dt, lookahead_time, gain):
     print("\nMoving...")
 
     if hasattr(joints, "tolist"):
@@ -150,7 +143,7 @@ def servoJ(joints,speed, acceleration, dt, lookahead_time, gain):
     else:
         rtde.servoJ(
             joints,
-            speed,
+            velocity,
             acceleration,
             dt,
             lookahead_time,
@@ -313,15 +306,15 @@ def solveIK(pose, reference = None):
     return None
 
 def get_middle_pose(string):
-    frog = np.array(cal["string_paths"][string]["frog"])
-    tip = np.array(cal["string_paths"][string]["tip"])
+    frog = np.array(arm_config.data["string_paths"][string]["frog"])
+    tip = np.array(arm_config.data["string_paths"][string]["tip"])
     return 0.5 * (frog + tip)
 
 def get_middle_joints(string):
     middle_pose = get_middle_pose(string)
 
     frog_joints = np.array(
-        cal["joint_paths"][string]["frog"],
+        arm_config.data["joint_paths"][string]["frog"],
         dtype = float
     )
 
@@ -341,11 +334,25 @@ def bowing_segment(
     start_pose = np.asarray(start_pose, dtype = float)
     end_pose = np.asarray(end_pose, dtype = float)
 
+    start_joints = np.asarray(start_joints, dtype = float)
+    end_joints = np.asarray(end_joints, dtype = float)
+
+    if start_pose.shape != (6,):
+        raise ValueError("Starting Pose Must Containg 6 Values")
+
+    if end_pose.shape != (6,):
+        raise ValueError("Ending Pose Must Containg 6 Values")
+
+    if start_joints.shape != (6,):
+        raise ValueError("Starting Joints Must Containg 6 Values")
+
+    if end_joints.shape != (6,):
+        raise ValueError("Ending Joints Must Containg 6 Values")
+
     if config.simulation:
         if halt:
             stop()
             sys.exit()
-        end_pose = np.array(end_pose, dtype=float)
 
         moveL(
             end_pose.tolist(),
@@ -374,7 +381,7 @@ def bowing_segment(
         #     limits
         # )
 
-        for alpha in np.linspace(0.0, 1.0, 500):
+        for alpha in np.linspace(0.0, 1.0, 2000):
             if halt:
                 stop()
                 sys.exit()
@@ -383,12 +390,15 @@ def bowing_segment(
        
             pose = (1 - alpha) * start_pose + alpha * end_pose
 
-            joints = (1- - alpha) * np.asarray(start_joints) + alpha * np.asarray(end_joints)
+            joints = (
+                (1 - alpha) * start_joints 
+                + alpha * end_joints
+            )
 
             servoJ(
                 joints.tolist(),
-                arm_config.bow_speed,
                 arm_config.bow_acceleration,
+                arm_config.bow_velocity,
                 arm_config.dt,
                 arm_config.lookahead_time,
                 arm_config.gain

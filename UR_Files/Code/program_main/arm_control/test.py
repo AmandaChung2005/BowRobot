@@ -1,33 +1,43 @@
-import time
 import numpy as np
-import sys
 from pathlib import Path
+import sys
 
 project_path = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_path))
 
-import config
 import arm_control.robot_interface as robot
-import arm_control.arm_config as arm_config
 
-print("RTDE connected:", robot.isConnected())
+input("Press Enter to start the test...")
 
+# Get current joint positions
 current = robot.getCurrentJoints()
 
-print("Current joints:")
-print(np.degrees(current))
+print("Current joints (rad):", current)
+print("Current joints (deg):", np.degrees(current))
 
-target = np.array(arm_config.home_joints, dtype=float)
+# Move joint 1 by +1 degree
+target = np.degrees(current.copy())
+target[0] += 1.0
 
-print("\nHome target:")
-print(target)
+print("Target joints (deg):", target)
 
-print("\nMoving to home...")
+# Test servoJ at 500 Hz
+for _ in range(500):
 
-robot.moveJ(
-    target,
-    arm_config.joint_speed,
-    arm_config.joint_acceleration
-)
+    t_start = robot.initPeriod()
 
-print("DONE")
+    robot.servoJ(
+        target.tolist(),
+        1.0,       # acceleration [rad/s^2]
+        0.5,       # velocity [rad/s]
+        0.002,     # dt [s]
+        0.1,       # lookahead time [s]
+        300        # gain
+    )
+
+    robot.waitPeriod(t_start)
+
+# Stop servoJ
+robot.stop()
+
+print("Test complete")

@@ -166,17 +166,21 @@ class RTDEInterface:
         period = 1.0 / self.heartbeat_hz
 
         while not self.heartbeat_stop.is_set():
-            with self.lock:
+            try:
                 if self.con is not None:
-                    try:
-                        self.con.send(self.watchdog)
-                    except Exception as e:
-                        print(f"Heartbeat Error: {e}")
-                        self.heartbeat_stop.set()
-                        break
+                    with self.lock:
+                        result = self.con.send(self.watchdog)
+                        if not result:
+                            print(f"Heartbeat Error: {e}")
+            except Exception as e:
+                print("========== HEARTBEAT ERROR ==========")
+                print("Type:", type(e).__name__)
+                print("Error:", repr(e))
+                print("=====================================")
+                time.sleep(0.1)
 
             time.sleep(period)
-
+                
     def stop_heartbeat(self):
         self.heartbeat_stop.set()
 
@@ -189,8 +193,7 @@ class RTDEInterface:
         if self.con is None:
             raise RuntimeError("RTDE Isn't Connected")
 
-        with self.lock:
-            return self.con.receive()
+        return self.con.receive()
 
     def send_motion_command(self, mode = None):
         if self.con is None:
@@ -294,13 +297,13 @@ class RTDEInterface:
     # Setpoints
     def set_motion_parameters(
             self,
-            speed,
             acceleration,
+            velocity,
             dt,
             lookahead_time,
             gain
     ):
-        self.setp.input_double_register_6 = float(speed)
+        self.setp.input_double_register_6 = float(velocity)
         self.setp.input_double_register_7 = float(acceleration)
         self.setp.input_double_register_8 = float(dt)
         self.setp.input_double_register_9 = float(lookahead_time)
@@ -469,8 +472,8 @@ class RTDEInterface:
     def servoJ(
             self,
             joints,
-            speed,
             acceleration,
+            velocity,
             dt,
             lookahead_time,
             gain
@@ -478,25 +481,24 @@ class RTDEInterface:
         if len(joints) != 6:
             raise ValueError("servoJ Requires 6 Joint Values")
 
-        joints_rad = np.deg2rad(joints).tolist()
+        joints_rad = np.deg2rad(joints, dtype = float)
 
-        self.set_joints(joints_rad)
+        self.set_joints(joints_rad.tolist())
 
         self.set_motion_parameters(
-            speed,
             acceleration,
+            velocity,
             dt,
             lookahead_time,
             gain
         )
 
         with self.lock:
+            self.watchdog.input_int_register_0 = self.mode_servoj
+
             if not self.con.send(self.setp):
                 raise RuntimeError("Failed to Send servoJ Setpoint")
 
-        self.watchdog.input_int_register_0 = self.mode_servoj
-
-        with self.lock:
             if not self.con.send(self.watchdog):
                 raise RuntimeError("Failed to Send servoJ Command")
 

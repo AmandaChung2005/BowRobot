@@ -19,7 +19,7 @@
 
 		
 	<!-- Motion Parameters -->
-	<!-- Speed -->
+	<!-- Velocity -->
 	<field name="input_double_register_6" type="DOUBLE"/>
 	<!-- Acceleration -->
 	<field name="input_double_register_7" type="DOUBLE"/>

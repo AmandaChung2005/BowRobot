@@ -23,6 +23,15 @@ robot.moveJ(
     arm_config.joint_acceleration
 )
 
+# user.wait_for_enter("Force Mode Test")
+
+# robot.forceMode(
+#     arm_config.rosin_task_frame,
+#     arm_config.rosin_selection_vector,
+#     arm_config.rosin_wrench,
+#     arm_config.rosin_limits
+# )
+
 time.sleep(0.02)
 
 at_violin_hover = False
@@ -48,11 +57,18 @@ while True:
 
         user.wait_for_enter("Move Onto Rosin")
 
-        robot.moveJ(
-            cal["rosin_joints"]["tip"],
-            arm_config.joint_speed,
-            arm_config.joint_acceleration
+        robot.forceMode(
+            arm_config.rosin_task_frame,
+            arm_config.rosin_selection_vector,
+            arm_config.rosin_wrench,
+            arm_config.rosin_limits
         )
+
+        # robot.moveJ(
+        #     cal["rosin_joints"]["tip"],
+        #     arm_config.joint_speed,
+        #     arm_config.joint_acceleration
+        # )
 
         user.wait_for_enter("Rosin Bow")
 
@@ -60,16 +76,16 @@ while True:
             robot.bowing_segment(
                 cal["rosin_position"]["tip"],
                 cal["rosin_position"]["frog"],
-                cal["rosin_position"]["tip"],
-                cal["rosin_position"]["frog"],
+                cal["rosin_joints"]["tip"],
+                cal["rosin_joints"]["frog"],
                 rosin = True
             )
 
             robot.bowing_segment(
                 cal["rosin_position"]["frog"],
                 cal["rosin_position"]["tip"],
-                cal["rosin_position"]["frog"],
-                cal["rosin_position"]["tip"],
+                cal["rosin_joints"]["frog"],
+                cal["rosin_joints"]["tip"],
                 rosin = True
             )
 

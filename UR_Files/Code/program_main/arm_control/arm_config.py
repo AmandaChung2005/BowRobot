@@ -15,15 +15,15 @@ step_xyz = 5               # mm
 step_rot = 10              # deg
 
 # Bowing Parameters
-bow_speed = 0.10         # m/s
-bow_acceleration = 0.2   # m/s^2
+bow_velocity = 0.10         # rad/s
+bow_acceleration = 0.2   # rad/s^2
 bow_force = -3.0         # N
 
 # Rosin Parameters
 rosin_hover = 50                             # mm
 rosin_selection_vector = [0, 0, 1, 0, 0, 0]
 rosin_wrench = [
-    0, 0, 2,   # N
+    0, 0, -2,   # N
     0, 0, 0     # Nm
 ]
 rosin_limits = [
@@ -60,6 +60,7 @@ limits = [
 ] 
 
 # Calibration
+import numpy as np
 import arm_control.calibration_data as calibration_data
 import config
 
@@ -87,4 +88,13 @@ task_frames = {
     for string, poses in string_paths.items()
 }
 
-rosin_task_frame = rosin_position["tip"]
+rosin_tip = np.array(rosin_position["tip"], dtype = float)
+
+rosin_task_frame = [
+    rosin_tip[0]/1000.0,
+    rosin_tip[1]/1000.0,
+    rosin_tip[2]/1000.0,
+    0,
+    0,
+    0
+]
