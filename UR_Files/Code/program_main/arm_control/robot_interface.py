@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 import config
 import arm_control.arm_config as arm_config
@@ -22,7 +23,7 @@ else:
     rtde.connect()
 
 # Motion control
-def moveJ(joints, speed, acceleration):    
+def moveJ(joints, velocity, acceleration):    
     if hasattr(joints, "tolist"):
         joints = joints.tolist()
 
@@ -32,7 +33,7 @@ def moveJ(joints, speed, acceleration):
         robot.setSpeed(
             speed_linear = arm_config.speed*1000,
             accel_linear = arm_config.acceleration*1000,
-            speed_joints = np.degrees(speed),
+            speed_joints = np.degrees(velocity),
             accel_joints = np.degrees(acceleration)
         )
 
@@ -58,14 +59,14 @@ def moveJ(joints, speed, acceleration):
 
         rtde.moveJ(
             target_deg.tolist(),
-            speed,
+            velocity,
             acceleration
         )
 
         rtde.wait_for_move()
         print("moveJ Complete")
 
-def moveL(pose, speed, acceleration):
+def moveL(pose, velocity, acceleration):
     if hasattr(pose, "tolist"):
         pose = pose.tolist()
 
@@ -80,7 +81,7 @@ def moveL(pose, speed, acceleration):
         else:
             rdk_pose = TxyzRxyz_2_Pose(pose)
 
-        robot.setSpeed(speed_linear=speed*1000, accel_linear=acceleration*1000)
+        robot.setSpeed(speed_linear=velocity*1000, accel_linear=acceleration*1000)
         robot.MoveL(rdk_pose)
 
     else:
@@ -96,11 +97,127 @@ def moveL(pose, speed, acceleration):
 
         rtde.moveL(
             pose_array.tolist(),
-            speed,
+            velocity,
             acceleration
         )
 
         rtde.wait_for_move()
+
+def moveL_safe(
+        pose,
+        velocity,
+        acceleration
+):
+    pose = np.asarray(
+        pose,
+        dtype = float
+    )
+
+    current_pose = np.asarray(
+        getActualTCPPose(),
+        dtype = float
+    )
+
+    start = current_pose[:3]
+    end = pose[:3]
+
+    obstacle = find_collision_obstacle(
+        start,
+        end
+    )
+
+    if obstacle is not None:
+        print(
+            "TCP Collision Risk Detected Near Obstacle: ",
+            obstacle
+        )
+
+        waypoint_position = generate_avoidance_waypoint(
+            start,
+            end,
+            obstacle
+        )
+
+        waypoint_pose = pose_with_position(
+            pose,
+            waypoint_position
+        )
+
+        print(
+            "Routing Through Waypoint: ",
+            waypoint_position
+        )
+
+        moveL(
+            waypoint_pose,
+            velocity,
+            acceleration
+        )
+
+        moveL(
+            pose,
+            velocity,
+            acceleration
+        )
+
+        return
+
+    bow_direction = get_bow_direction()
+
+    for alpha in np.linspace(0.0, 1.0, 20):
+        tcp_position = (
+            (1.0 - alpha) * start + alpha * end
+        )
+
+        obstacle = bow_collision_obstacle(
+            tcp_position,
+            bow_direction
+        )
+
+        if obstacle is not None:
+            print(
+                "Bow Collsion Risk Detecetd Near Obstacle: ",
+                obstacle
+            )
+
+            waypoint_position = generate_avoidance_waypoint(
+                start,
+                end,
+                obstacle
+            )
+
+            waypoint_pose = pose_with_position(
+                pose,
+                waypoint_position
+            )
+
+            print(
+                "Routing Bow Through Waypoint: ",
+                waypoint_position
+            )
+
+            moveL(
+                waypoint_pose,
+                velocity,
+                acceleration
+            )
+
+            moveL(
+                pose,
+                velocity,
+                acceleration
+            )
+
+            return
+
+        print("Path Clear")
+
+        moveL(
+            pose,
+            velocity,
+            acceleration
+        )
+
 
 def servoJ(joints,acceleration, velocity, dt, lookahead_time, gain):
     print("\nMoving...")
@@ -198,13 +315,47 @@ def jogCartesian(selection_vector, wrench):
     return
 
 # Force Control
-def forceMode(task_frame, selection_vector, wrench, limits):
+def forceMode(
+    task_frame,
+    selection_vector,
+    wrench,
+    limits,
+    force_constant,
+    desired_force,
+    rosin = False,
+    string = None
+):
     if config.simulation:
         return
+
+    if rosin:
+        distance = distance_from_frog(
+            rosin = True
+        )
+    else:
+        distance = distance_from_frog(
+            rosin = False,
+            string = string
+        )
+
+    force_z = scale_force_with_distance(
+        desired_force = desired_force,
+        distance_from_frog = distance,
+        force_constant = force_constant
+    )
+
+    force_wrench = list(wrench)
+    force_wrench[0] = 0.0
+    force_wrench[1] = 0.0
+    force_wrench[2] = force_z
+    force_wrench[3] = 0.0
+    force_wrench[4] = 0.0
+    force_wrench[5] = 0.0
+
     rtde.set_force_parameters(
         task_frame,
         selection_vector,
-        wrench,
+        force_wrench,
         arm_config.force_type,
         limits
     )
@@ -320,6 +471,224 @@ def get_middle_joints(string):
 
     return solveIK(middle_pose, reference = frog_joints)
 
+def distance_from_frog(
+    string = None,
+    rosin = True
+):
+    if rosin:
+        frog_pose = np.asarray(
+            arm_config.rosin_task_frame,
+            dtype = float
+        )
+    else:
+        frog_pose = np.asarray(
+            arm_config.task_frames[string],
+            dtype = float
+        )
+
+    tcp_pose = np.asarray(
+        getActualTCPPose(),
+        dtype = float
+    )
+
+    delta_base = tcp_pose[:3] - frog_pose[:3]
+
+    R_task = Rotation.from_rotvec(
+        frog_pose[3:6]
+    ).as_matrix()
+
+    delta_task = R_task.T @ delta_base
+
+    distance = delta_task[0]
+
+    return distance
+
+def scale_force_with_distance(
+    desired_force,
+    distance_from_frog,
+    force_constant
+):
+    force = desired_force + force_constant * distance_from_frog
+    # + damping_constant * velocity
+
+    return force
+
+
+# Collision Avoidance
+def point_line_distance(point, start, end):
+    point = np.asarray(point, dtype = float)
+    start = np.asarray(start, dtype = float)
+    end = np.asarray(end, dtype = float)
+
+    line = end - start
+    line_length_sq = np.dot(line, line)
+
+    if line_length_sq < 1e-12:
+        return np.linalg.norm(point - start)
+
+    t = np.dot(point - start, line) / line_length_sq
+    t = np.clip(t, 0.0, 1.0)
+
+    closest = start + t * line
+
+    return np.linalg.norm(point - closest)
+
+def get_bow_direction():
+    tcp_pose = np.asarray(
+        getActualTCPPose(),
+        dtype = float
+    )
+
+    rotation_vector = tcp_pose[3:6]
+
+    R_tcp = Rotation.from_rotvec(
+        rotation_vector
+    ).as_matrix()
+
+    local_direction = np.array([
+        -1.0,
+        0.0,
+        0.0
+    ])
+
+    bow_direction = R_tcp @ local_direction
+
+    return bow_direction / np.linalg.norm(bow_direction)
+
+def bow_line(
+    tcp_position,
+    bow_direction
+):
+    tcp_position = np.asarray(tcp_position, dtype = float)
+    bow_direction = np.asarray(bow_direction, dtype = float)
+
+    norm = np.linalg.norm(bow_direction)
+
+    if norm < 1e-12:
+        raise ValueError("Bow Direction Can't Be Zero")
+
+    bow_direction = bow_direction / norm
+    bow_tip = tcp_position + bow_direction * arm_config.bow_length
+
+    return tcp_position, bow_tip
+
+
+def find_collision_obstacle(
+        start,
+        end,
+        safety_distance = None,
+        num_samples = 50
+):
+    start = np.asarray(start, dtype = float)
+    end = np.asarray(end, dtype = float)
+
+    if safety_distance is None:
+        safety_distance = arm_config.collision_radius
+
+    bow_direction = get_bow_direction()
+
+    for alpha in np.linspace(0.0, 1.0, num_samples):
+        tcp_position = ((1.0-alpha)* start + alpha * end)
+
+    for obstacle in arm_config.obstacles:
+        obstacle = np.asarray(obstacle, dtype = float)
+        tcp_distance = np.linalg.norm(obstacle - tcp_position)
+
+        if tcp_distance < safety_distance:
+            print(
+                "TCP Collision Detected: ",
+                obstacle,
+                "distance: ",
+                tcp_distance
+            )
+
+            return obstacle
+
+    
+    bow_start, bow_end = bow_line(
+        tcp_position,
+        bow_direction
+    )
+
+    for obstacle in arm_config.obstacles:
+        obstacle = np.asarray(
+            obstacle,
+            dtype = float
+        )
+
+        bow_distance = point_line_distance(
+            obstacle,
+            bow_start,
+            bow_end
+        )
+
+        if bow_distance < safety_distance:
+            print(
+                "Bow Collision Detected: ",
+                obstacle,
+                "Distance: ",
+                bow_distance
+            )
+
+            return obstacle
+
+    return None
+
+def generate_avoidance_waypoint(start, end, obstacle):
+    start = np.asarray(start, dtype = float)
+    end = np.asarray(end, dtype = float)
+    obstacle = np.asarray(obstacle, dtype = float)
+
+    direction = end - start
+    direction_norm = np.linalg.norm(direction)
+
+    if direction_norm < 1e-9:
+        return start.copy()
+
+    direction = direction / direction_norm
+    obstacle_relative = obstacle - start
+
+    projection = np.dot(
+        obstacle_relative,
+        direction
+    )
+
+    closest = start + projection * direction
+    away = closest - obstacle
+    away_norm = np.linalg.norm(away)
+
+    if away_norm < 1e-9:
+        axes = [
+            np.array([1.0, 0.0, 0.0]),
+            np.array([0.0, 1.0, 0.0]),
+            np.array([0.0, 0.0, 1.0])
+        ]
+
+        reference = min(
+            axes,
+            key = lambda axis: abs(np.dot(axis, direction))
+        )
+
+        away = np.cross(direction, reference)
+        away_norm = np.linalg.norm(away)
+
+    away = away / away_norm
+
+    waypoint = closest + away * (
+        arm_config.collision_radius + arm_config.waypoint_offset
+    )
+
+    return waypoint
+
+def pose_with_position(pose, position):
+    new_pose = np.asarray(
+        pose,
+        dtype = float
+    ).copy()
+
+    new_pose[:3] = position
+
+    return new_pose
 
 # Motion Routines
 def bowing_segment(

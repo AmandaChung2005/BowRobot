@@ -18,6 +18,7 @@ step_rot = 10              # deg
 bow_velocity = 0.10         # rad/s
 bow_acceleration = 0.2   # rad/s^2
 bow_force = -3.0         # N
+force_constant = 1.0
 
 # Rosin Parameters
 rosin_hover = 50                             # mm
@@ -59,6 +60,16 @@ limits = [
     1, 1, 1    # rad/s
 ] 
 
+# Collision Avoidance Points
+bow_length = 750           # mm  
+obstacles = [
+    np.array([])
+]
+
+collision_radius = 50      # mm
+avoidance_distance = 100   # mm
+waypoint_offset = 100      # mm
+
 # Calibration
 import numpy as np
 import arm_control.calibration_data as calibration_data
@@ -88,12 +99,12 @@ task_frames = {
     for string, poses in string_paths.items()
 }
 
-rosin_tip = np.array(rosin_position["tip"], dtype = float)
+rosin_frog = np.array(rosin_position["frog"], dtype = float)
 
 rosin_task_frame = [
-    rosin_tip[0]/1000.0,
-    rosin_tip[1]/1000.0,
-    rosin_tip[2]/1000.0,
+    rosin_frog[0]/1000.0,
+    rosin_frog[1]/1000.0,
+    rosin_frog[2]/1000.0,
     0,
     0,
     0
