@@ -15,7 +15,7 @@ step_xyz = 5               # mm
 step_rot = 10              # deg
 
 # Bowing Parameters
-bow_velocity = 0.10         # rad/s
+bow_speed = 0.10         # rad/s
 bow_acceleration = 0.2   # rad/s^2
 bow_force = -3.0         # N
 force_constant = 1.0
@@ -49,6 +49,7 @@ gain = 300             # unitless
 dt = 1.0/500.0         # s
 
 # Force Control
+useForce = True
 force_type = 2
 selection_vector = [1, 0, 1, 0, 0, 0]  # Z-Axis Force Control
 wrench = [
@@ -61,6 +62,8 @@ limits = [
 ] 
 
 # Collision Avoidance Points
+import numpy as np
+
 bow_length = 750           # mm  
 obstacles = [
     np.array([])
@@ -71,7 +74,6 @@ avoidance_distance = 100   # mm
 waypoint_offset = 100      # mm
 
 # Calibration
-import numpy as np
 import arm_control.calibration_data as calibration_data
 import config
 

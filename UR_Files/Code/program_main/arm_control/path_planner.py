@@ -4,7 +4,7 @@ import config
 
 from . import arm_config
 from . import calibration_data as cal
-from . import robot_interface as robot
+from . import robot_interface_new as robot
 
 if config.simulation:
     cal = cal.simulation

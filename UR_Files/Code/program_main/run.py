@@ -15,7 +15,7 @@ if config.setup:
     sys.exit()
 
 else:
-    import arm_control.robot_interface as robot
+    import arm_control.robot_interface_new as robot
     print("RTDE Connected: ", robot.isConnected())
 
     if not config.simulation:

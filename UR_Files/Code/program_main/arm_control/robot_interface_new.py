@@ -1,4 +1,6 @@
 import sys
+import socket
+import time
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -17,39 +19,130 @@ if config.simulation:
 
     RDK = Robolink()
     robot = RDK.Item(config.robotName, ITEM_TYPE_ROBOT)
+
+    rtde_r = None
     
 else:
-    rtde = control_loop.RTDEInterface()
-    rtde.connect()
+    # rtde = control_loop.RTDEInterface()
+    # rtde.connect()
+
+    from rtde_receive import RTDEReceiveInterface
+
+    rtde_r = RTDEReceiveInterface(config.host_ip)
+    robot = None
+
+def as_list(values):
+    if hasattr(values, "tolist"):
+        values = values.tolist()
+    return [float(v) for v in values]
+
+def format_vector(values):
+    values = as_list(values)
+    return "[" + ", ".join(f"{float(v):.8f}" for v in values) + "]"
+
+def format_pose(values):
+    return "p" + format_vector(as_list(values))
+
+# URScript Communication
+script_counter = 0
+
+def send_urscript(script, wait = 0.05):
+    global script_counter
+
+    lines = [
+        line.strip()
+        for line in script.strip().splitlines()
+        if line.strip()
+    ]
+
+    if not lines:
+        return
+
+    if len(lines) > 1 and not lines[0].lstrip().startswith("def "):
+        script_counter += 1
+
+        body = "\n".join(
+            " " + line
+            for line in lines
+        )
+
+        function_name = f"urcmd_{script_counter}"
+
+        script = (
+            f"def {function_name}():\n"
+            f"{body}\n"
+            "end\n"
+        )
+
+    payload = script
+
+    if not payload.endswith("\n"):
+        payload += "\n"
+
+    with socket.create_connection(
+        (config.host_ip, config.script_port),
+        timeout = 5.0
+    ) as sock:
+        sock.sendall(payload.encode("utf-8"))
+
+    time.sleep(wait)
+
+def wait_joints(target, tol = 0.01, timeout = 30.0):
+    target = np.array(as_list(target), dtype = float)
+    t0 = time.time()
+
+    while time.time() - t0 < timeout:
+        current = np.array(getCurrentJoints(), dtype = float)
+
+        if np.linalg.norm(current - target) < tol:
+            return True
+        
+        time.sleep(0.05)
+    return False
+
+def wait_pose(target, tol = 0.002, timeout = 30.0):
+    target = np.array(as_list(target), dtype = float)
+    t0 = time.time()
+
+    while time.time() - t0 < timeout:
+        current = np.array(getActualTCPPose(), dtype = float)
+
+        if np.linalg.norm(current[:3] - target[:3]) < tol:
+            return True
+        
+        time.sleep(0.05)
+    return False
+
 
 # Motion control
-def moveJ(joints, velocity, acceleration):    
-    if hasattr(joints, "tolist"):
-        joints = joints.tolist()
+def moveJ(joints, speed, acceleration):    
+    print("\nMoving...")
 
-    target_deg = np.asarray(joints, dtype = float)
+    joints = as_list(joints)
+    joints_rad = np.deg2rad(joints)
         
     if config.simulation:
         robot.setSpeed(
             speed_linear = arm_config.speed*1000,
             accel_linear = arm_config.acceleration*1000,
-            speed_joints = np.degrees(velocity),
+            speed_joints = np.degrees(speed),
             accel_joints = np.degrees(acceleration)
         )
 
         current = np.array(robot.Joints().list(), dtype = float)
 
-        if np.linalg.norm(current - target_deg) < 0.1:
+        if np.linalg.norm(current - joints_rad) < np.deg2rad(0.1):
             print("Already at Target Joint Position")
             return
     
-        robot.MoveJ(target_deg.tolist(), blocking=True)
+        robot.MoveJ(joints_rad.tolist(), blocking=True)
+
         return
 
-    current = np.array(rtde.getActualQ(), dtype = float)
 
-    difference = np.degrees(current) - target_deg
-    error = np.linalg.norm(current - np.deg2rad(target_deg))
+    current = np.asarray(getCurrentJoints(), dtype = float)
+
+    error = np.linalg.norm(current - joints_rad)
 
     if error < np.deg2rad(2.0):
         print("Already at Target Joint Position")
@@ -57,18 +150,20 @@ def moveJ(joints, velocity, acceleration):
 
     print("Sending moveJ...")
 
-    rtde.moveJ(
-        target_deg.tolist(),
-        velocity,
-        acceleration
+    send_urscript(
+        f"movej("
+        f"{format_vector(joints_rad)}, "
+        f"a = {acceleration}, "
+        f"v = {speed}"
+        f")"
     )
 
-    rtde.wait_for_move()
+    wait_joints(joints_rad)
     print("moveJ Complete")
 
-def moveL(pose, velocity, acceleration):
-    if hasattr(pose, "tolist"):
-        pose = pose.tolist()
+def moveL(pose, speed, acceleration):
+    print("\nMoving...")
+    pose = as_list(pose)
 
     if config.simulation:
         if isinstance(pose, list) and len(pose) == 16:
@@ -81,37 +176,64 @@ def moveL(pose, velocity, acceleration):
         else:
             rdk_pose = TxyzRxyz_2_Pose(pose)
 
-        robot.setSpeed(speed_linear=velocity*1000, accel_linear=acceleration*1000)
+        robot.setSpeed(speed_linear=speed*1000, accel_linear=acceleration*1000)
         robot.MoveL(rdk_pose)
+        return
 
-    else:
-        pose_array = np.asarray(pose, dtype=float).copy()
+    target_pose = np.array(
+        pose,
+        dtype = float
+    )
 
-        if pose_array.shape != (6,):
-            raise ValueError(
-                f"moveL Expected 6 Pose Values, Got {pose_array}: "
-                f"shape = {pose_array.shape}"
-            )
-        pose_array[:3] /= 1000.0
-        pose_array[3:6] = np.deg2rad(pose_array[3:6])
-
-        rtde.moveL(
-            pose_array.tolist(),
-            velocity,
-            acceleration
+    if target_pose.shape != (6,):
+        raise ValueError(
+            f"moveL Expected 6 Pose Values, Got {target_pose}: "
+            f" shape = {target_pose.shape}"
         )
 
-        rtde.wait_for_move()
+    current= np.asarray(
+        getActualTCPPose(),
+        dtype = float
+    )
+
+    position_error = np.linalg.norm(
+        current[:3] - target_pose[:3] / 1000.0
+    )
+
+    rotation_error = np.linalg.norm(
+        current[3:6] - np.deg2rad(target_pose[3:6])
+    )
+
+    if (
+        position_error < 0.001
+        and rotation_error < np.deg2rad(1.0)
+    ):
+        print("Already at Target Cartesian Position")
+        return
+
+    target_pose[:3] /= 1000.0
+    target_pose[3:6] = np.deg2rad(
+        target_pose[3:6]
+    )
+
+    send_urscript(
+        f"movel("
+        f"{format_pose(target_pose)}, "
+        f"a = {acceleration}, "
+        f"v = {speed}"
+        f")"
+    )
+
+    wait_pose(target_pose)
+
+    print("moveL Complete")
 
 def moveL_safe(
         pose,
         velocity,
         acceleration
 ):
-    pose = np.asarray(
-        pose,
-        dtype = float
-    )
+    pose = as_list(pose)
 
     current_pose = np.asarray(
         getActualTCPPose(),
@@ -219,11 +341,17 @@ def moveL_safe(
         )
 
 
-def servoJ(joints,acceleration, velocity, dt, lookahead_time, gain):
+def servoJ(
+        joints,
+        acceleration,
+        speed,
+        dt,
+        lookahead_time,
+        gain
+    ):
     print("\nMoving...")
 
-    if hasattr(joints, "tolist"):
-        joints = joints.tolist()
+    joints = as_list(joints)
 
     if config.simulation:
         target_pose = TxyzRxyz_2_Pose(joints)
@@ -232,8 +360,7 @@ def servoJ(joints,acceleration, velocity, dt, lookahead_time, gain):
 
         best = None
         best_error = float ("inf")
-
-        current = np.array(robot.Joints().list(), dtype=float)
+        current = np.array(robot.Joints().list(), dtype = float)
 
         for i in range(cols):
             q = np.array([
@@ -243,7 +370,7 @@ def servoJ(joints,acceleration, velocity, dt, lookahead_time, gain):
                 solutions[3, i],
                 solutions[4, i],
                 solutions[5, i]
-            ], dtype=float)
+            ], dtype = float)
 
             error = np.linalg.norm(q - current)
             
@@ -256,16 +383,19 @@ def servoJ(joints,acceleration, velocity, dt, lookahead_time, gain):
             return
         
         robot.setJoints(best.tolist())
+        return
 
-    else:
-        rtde.servoJ(
-            joints,
-            velocity,
-            acceleration,
-            dt,
-            lookahead_time,
-            gain
-        )
+    send_urscript(
+        f"servoj("
+        f"{format_vector(joints)}, "
+        f"a = {acceleration}, "
+        f"v = {speed}, "
+        f"t = {dt}, "
+        f"lookahead_time = {lookahead_time}, "
+        f"gain = {gain}"
+        f")",
+        wait = dt
+    )
 
 # Cartesian Jogging
 last_motion = None
@@ -324,15 +454,21 @@ def forceMode(
     if config.simulation or not arm_config.useForce:
         return
 
-    rtde.set_force_parameters(
-        task_frame,
-        selection_vector,
-        wrench,
-        arm_config.force_type,
-        limits
+    task_frame = np.asarray(task_frame, dtype = float).copy()
+    task_frame[:3] /= 1000.0
+    task_frame[3:6] = np.deg2rad(task_frame[3:6])
+
+    script = (
+        "force_mode("
+        f"{format_pose(task_frame)}, "
+        f"{format_vector(selection_vector)}, "
+        f"{format_vector(wrench)}, "
+        f"{arm_config.force_type}, "
+        f"{format_vector(limits)}"
+        ")"
     )
 
-    rtde.set_force_mode(True)
+    send_urscript(script)
 
 def forceMode_scaled(
     task_frame,
@@ -344,7 +480,7 @@ def forceMode_scaled(
     rosin = False,
     string = None
 ):
-    if config.simulation or not arm_config.useForce:
+    if config.simulation:
         return
 
     if rosin:
@@ -371,7 +507,7 @@ def forceMode_scaled(
     force_wrench[4] = 0.0
     force_wrench[5] = 0.0
 
-    rtde.set_force_parameters(
+    rtde_r.set_force_parameters(
         task_frame,
         selection_vector,
         force_wrench,
@@ -379,68 +515,77 @@ def forceMode_scaled(
         limits
     )
 
-    rtde.set_force_mode(True)
+    rtde_r.set_force_mode(True)
 
 def forceModeStop():
     if config.simulation:
         return
 
-    rtde.set_force_mode(False)
+    rtde_r.set_force_mode(False)
 
 # Connection Utilities
 def isConnected():
     if config.simulation:
         return True
-    return rtde.isConnected()
+    return rtde_r.isConnected()
 
 def reconnect():
     if config.simulation:
         return True
-    return rtde.reconnect()
+    return rtde_r.reconnect()
 
 def disconnect():
     if config.simulation:
         return
-    rtde.disconnect()
+    rtde_r.disconnect()
 
 # Timing Utilities
 def initPeriod():
     if config.simulation:
         return None
-    return rtde.initPeriod()
+    return rtde_r.initPeriod()
 
 def waitPeriod(t_start):
     if config.simulation:
         return
-    rtde.waitPeriod(t_start)
+    rtde_r.waitPeriod(t_start)
 
 # Robot State
 def getActualTCPPose():
     if config.simulation:
         return Pose_2_TxyzRxyz(robot.Pose())
-    return rtde.getActualTCPPose()
+    return rtde_r.getActualTCPPose()
 
 def getPose():
     if config.simulation:
         return robot.Pose()
-    return rtde.getActualTCPPose()
+    return rtde_r.getActualTCPPose()
 
 def getJoints():
     if config.simulation:
         return robot.Joints()
-    return rtde.getActualQ()
+    return rtde_r.getActualQ()
 
 def getCurrentJoints():
     if config.simulation:
         return np.array(robot.Joints().list(), dtype = float)
     else:
-        return np.array(rtde.getActualQ(), dtype = float)
+        return np.array(rtde_r.getActualQ(), dtype = float)
 
 # Robot Shutdown
 def stop():
     if config.simulation:
         return
-    rtde.stop()
+
+    if arm_config.useForce:
+        send_urscript(
+            "stopl(1.2)\n"
+            "end_force_mode()"
+        )
+    else:
+        send_urscript(
+            "stopl(1.2)"
+        )
 
 # Calculations
 def solveIK(pose, reference = None):
@@ -448,14 +593,9 @@ def solveIK(pose, reference = None):
         if isinstance(pose, Mat):
             target_pose = pose
         else:
-            if hasattr(pose, "tolist"):
-                pose = pose.tolist()
-
+            pose = as_list(pose)
             tool = robot.PoseTool()
-            target_pose = TxyzRxyz_2_Pose(pose) * tool.inv()
-
-        solutions = robot.SolveIK_All(target_pose)    
-
+            target_pose = TxyzRxyz_2_Pose(pose) * tool.inv() 
 
         if reference is not None:
             robot.setJoints(reference.tolist())
@@ -468,12 +608,12 @@ def solveIK(pose, reference = None):
         # Verify solution
         robot.setJoints(q)
 
-        actual = np.array(Pose_2_TxyzRxyz(robot.Pose()), dtype=float)
-        target = np.array(pose, dtype=float)
-
         return np.array(q.list(), dtype=float)    
 
-    return None
+    if reference is not None:
+        return np.asarray(as_list(reference), dtype = float)
+
+    return getCurrentJoints()
 
 def get_middle_pose(string):
     frog = np.array(arm_config.data["string_paths"][string]["frog"])
@@ -718,9 +858,41 @@ def bowing_segment(
         halt=False,
         rosin = False
     ):
+    if halt:
+        stop()
+        sys.exit()
 
-    start_pose = np.asarray(start_pose, dtype = float)
-    end_pose = np.asarray(end_pose, dtype = float)
+    if config.simulation:
+        end_pose = np.array(end_pose, dtype = float)
+
+        moveL(
+            end_pose.tolist(),
+            arm_config.bow_speed,
+            arm_config.bow_acceleration
+        )
+        return
+
+    if rosin:
+        task_frame = np.asarray(
+            arm_config.rosin_task_frame,
+            dtype = float
+        )
+        selection_vector = arm_config.rosin_selection_vector
+        wrench = arm_config.rosin_wrench
+        limits = arm_config.rosin_limits
+    else:
+        task_frame = np.asarray(
+            arm_config.task_frames[
+                arm_config.current_string
+            ],
+            dtype = float
+        )
+        selection_vector = arm_config.selection_vector
+        wrench = arm_config.wrench
+        limits = arm_config.limits
+
+    start_pose = np.asarray(as_list(start_pose), dtype = float)
+    end_pose = np.asarray(as_list(end_pose), dtype = float)
 
     start_joints = np.asarray(start_joints, dtype = float)
     end_joints = np.asarray(end_joints, dtype = float)
@@ -737,62 +909,68 @@ def bowing_segment(
     if end_joints.shape != (6,):
         raise ValueError("Ending Joints Must Containg 6 Values")
 
-    if config.simulation:
-        if halt:
-            stop()
-            sys.exit()
+    target_pose = end_pose.copy()
+    target_pose[:3] /= 1000.0
+    target_pose[3:6] = np.deg2rad(target_pose[3:6])
 
-        moveL(
-            end_pose.tolist(),
-            arm_config.bow_speed,
-            arm_config.bow_acceleration
+    force_task_frame = task_frame.copy()
+    force_task_frame[:3] /= 1000.0
+    force_task_frame[3:6] = np.deg2rad(force_task_frame[3:6])
+
+    stroke = (
+        f"movel({format_pose(target_pose)}, "
+        f"a = {arm_config.bow_acceleration}, "
+        f"v = {arm_config.bow_speed})"
+    )
+
+    if arm_config.useForce:
+        script = (
+            "force_mode("
+            f"{format_pose(force_task_frame)}, "
+            f"{format_vector(selection_vector)}, "
+            f"{format_vector(wrench)}, "
+            f"{arm_config.force_type}, "
+            f"{format_vector(limits)}"
+            ")\n"
+            f"{stroke}\n"
+            "end_force_mode()\n"
         )
 
+        send_urscript(script, wait = 0.01)
+        wait_pose(target_pose)
+
     else:
-        if rosin:
-            task_frame = arm_config.rosin_task_frame
-            selection_vector = arm_config.rosin_selection_vector
-            wrench = arm_config.rosin_wrench
-            limits = arm_config.rosin_limits
-        else:
-            task_frame = arm_config.task_frames[
-                arm_config.current_string
-            ]
-            selection_vector = arm_config.selection_vector
-            wrench = arm_config.wrench
-            limits = arm_config.limits
+        script = stroke
+        send_urscript(script, wait = 0.01)
+        wait_pose(target_pose)
+    
 
-        # forceMode(
-        #     task_frame,
-        #     selection_vector,
-        #     wrench,
-        #     limits
-        # )
 
-        for alpha in np.linspace(0.0, 1.0, 2000):
-            if halt:
-                stop()
-                sys.exit()
+
+        # for alpha in np.linspace(0.0, 1.0, 2000):
+        #     if halt:
+        #         stop()
+        #         sys.exit()
             
-            t_start = initPeriod()
+        #     t_start = initPeriod()
        
-            pose = (1 - alpha) * start_pose + alpha * end_pose
+        #     pose = (1 - alpha) * start_pose + alpha * end_pose
 
-            joints = (
-                (1 - alpha) * start_joints 
-                + alpha * end_joints
-            )
+        #     joints = (
+        #         (1 - alpha) * start_joints 
+        #         + alpha * end_joints
+        #     )
 
-            servoJ(
-                joints.tolist(),
-                arm_config.bow_acceleration,
-                arm_config.bow_velocity,
-                arm_config.dt,
-                arm_config.lookahead_time,
-                arm_config.gain
-            )
+        #     servoJ(
+        #         joints.tolist(),
+        #         arm_config.bow_acceleration,
+        #         arm_config.bow_velocity,
+        #         arm_config.dt,
+        #         arm_config.lookahead_time,
+        #         arm_config.gain
+        #     )
         
-            waitPeriod(t_start)
+        #     waitPeriod(t_start)
 
         # forceModeStop()
 
