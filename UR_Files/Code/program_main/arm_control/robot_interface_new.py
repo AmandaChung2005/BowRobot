@@ -7,7 +7,6 @@ from scipy.spatial.transform import Rotation
 import config
 import arm_control.arm_config as arm_config
 import arm_control.calibration_data as cal
-import RTDE.code.control_loop as control_loop
 
 
 # Initialization (Simulation vs Reality)
@@ -23,9 +22,6 @@ if config.simulation:
     rtde_r = None
     
 else:
-    # rtde = control_loop.RTDEInterface()
-    # rtde.connect()
-
     from rtde_receive import RTDEReceiveInterface
 
     rtde_r = RTDEReceiveInterface(config.host_ip)
@@ -161,6 +157,221 @@ def moveJ(joints, speed, acceleration):
     wait_joints(joints_rad)
     print("moveJ Complete")
 
+def moveJ_safe(
+        joints,
+        speed,
+        acceleration,
+        target_pose,
+        safety_distance=None
+    ):
+    print("\nChecking MoveJ Path...")
+
+    joints = np.asarray(
+        as_list(joints),
+        dtype=float
+    )
+
+    target_pose = np.asarray(
+        as_list(target_pose),
+        dtype=float
+    )
+
+    if joints.shape != (6,):
+        raise ValueError(
+            f"moveJ_safe Expected 6 Joint Values, Got {joints}"
+        )
+
+    if target_pose.shape != (6,):
+        raise ValueError(
+            f"moveJ_safe Expected 6 Pose Values, Got {target_pose}"
+        )
+
+    if safety_distance is None:
+        safety_distance = (
+            arm_config.collision_radius
+        )
+
+    current_pose = np.asarray(
+        getActualTCPPose(),
+        dtype=float
+    )
+
+    current_pose_mm = current_pose.copy()
+
+    current_pose_mm[:3] *= 1000.0
+
+    start_pose = current_pose_mm
+    end_pose = target_pose.copy()
+    end_pose[3:6] = np.deg2rad(end_pose[3:6])
+
+    start = start_pose[:3]
+    end = end_pose[:3]
+
+    print(
+        "Current TCP:",
+        np.round(start, 2)
+    )
+
+    print(
+        "Target TCP:",
+        np.round(end, 2)
+    )
+
+    obstacle = find_collision_obstacle(
+        start,
+        end,
+        safety_distance = safety_distance
+    )
+
+    if obstacle is not None:
+
+        print(
+            "\nMoveJ TCP path blocked."
+        )
+
+        waypoint_position = (
+            generate_avoidance_waypoint(
+                start,
+                end,
+                obstacle
+            )
+        )
+
+        waypoint_pose = (
+            pose_with_position(
+                target_pose,
+                waypoint_position
+            )
+        )
+
+        print(
+            "Moving to avoidance waypoint:",
+            np.round(
+                waypoint_position,
+                2
+            )
+        )
+
+        moveL(
+            waypoint_pose.tolist(),
+            speed,
+            acceleration
+        )
+
+        remaining_obstacle = find_collision_obstacle(
+            waypoint_position,
+            end,
+            safety_distance = safety_distance
+        )
+
+        if remaining_obstacle is not None:
+            print(
+                "Waypoint path is still blocked."
+            )
+
+            return False
+
+        print(
+            "Waypoint clear. Executing MoveJ."
+        )
+
+        moveJ(
+            joints.tolist(),
+            speed,
+            acceleration
+        )
+
+        return True
+
+
+    obstacle = find_bow_collision(
+        start_pose,
+        end_pose,
+        safety_distance = safety_distance
+    )
+
+    if obstacle is not None:
+
+        print(
+            "\nMoveJ bow path blocked."
+        )
+
+        waypoint_position = (
+            generate_avoidance_waypoint(
+                start,
+                end,
+                obstacle
+            )
+        )
+
+        waypoint_pose = (
+            pose_with_position(
+                target_pose,
+                waypoint_position
+            )
+        )
+
+        print(
+            "Moving to bow-avoidance waypoint:",
+            np.round(
+                waypoint_position,
+                2
+            )
+        )
+
+        moveL(
+            waypoint_pose.tolist(),
+            speed,
+            acceleration
+        )
+
+        waypoint_start_pose = np.asarray(
+            getActualTCPPose(),
+            dtype=float
+        ).copy()
+
+        waypoint_start_pose[:3] *= 1000.0
+
+        remaining_obstacle = find_bow_collision(
+            waypoint_start_pose,
+            end_pose,
+            safety_distance = safety_distance
+        )
+
+        if remaining_obstacle is not None:
+
+            print(
+                "Waypoint bow path is still blocked."
+            )
+
+            return False
+
+        print(
+            "Waypoint clear. Executing MoveJ."
+        )
+
+        moveJ(
+            joints.tolist(),
+            speed,
+            acceleration
+        )
+
+        return True
+
+    print(
+        "MoveJ Path Clear."
+    )
+
+    moveJ(
+        joints.tolist(),
+        speed,
+        acceleration
+    )
+
+    return True
+
+
+
 def moveL(pose, speed, acceleration):
     print("\nMoving...")
     pose = as_list(pose)
@@ -230,115 +441,89 @@ def moveL(pose, speed, acceleration):
 
 def moveL_safe(
         pose,
-        velocity,
+        speed,
         acceleration
 ):
-    pose = as_list(pose)
+    pose = np.asarray(as_list(pose), dtype=float)
 
-    current_pose = np.asarray(
-        getActualTCPPose(),
-        dtype = float
-    )
+    if pose.shape != (6,):
+        raise ValueError("moveL_safe Expected 6 Pose Values")
 
-    start = current_pose[:3]
-    end = pose[:3]
+    current_pose = np.asarray(getActualTCPPose(), dtype=float)
 
-    obstacle = find_collision_obstacle(
-        start,
-        end
-    )
+    current_pose_collision = current_pose.copy()
+    current_pose_collision[:3] *= 1000.0
+
+    target_pose_collision = pose.copy()
+    target_pose_collision[3:6] = np.deg2rad(target_pose_collision[3:6])
+
+    start = current_pose_collision[:3]
+    end = target_pose_collision[:3]
+
+    obstacle = find_collision_obstacle(start, end)
 
     if obstacle is not None:
-        print(
-            "TCP Collision Risk Detected Near Obstacle: ",
-            obstacle
+        print("\nRouting TCP Around Obstacle")
+
+        waypoint_position = (
+            generate_avoidance_waypoint(start, end, obstacle)
         )
 
-        waypoint_position = generate_avoidance_waypoint(
-            start,
-            end,
-            obstacle
+        waypoint_pose = (
+            pose_with_position(pose, waypoint_position)
         )
 
-        waypoint_pose = pose_with_position(
-            pose,
-            waypoint_position
-        )
-
-        print(
-            "Routing Through Waypoint: ",
-            waypoint_position
-        )
+        print("TCP Avoidance Waypoint:", np.round(waypoint_position, 2))
 
         moveL(
-            waypoint_pose,
-            velocity,
+            waypoint_pose.tolist(),
+            speed,
             acceleration
         )
 
         moveL(
-            pose,
-            velocity,
+            pose.tolist(),
+            speed,
             acceleration
         )
 
         return
 
-    bow_direction = get_bow_direction()
+    obstacle = find_bow_collision(current_pose_collision, target_pose_collision)
 
-    for alpha in np.linspace(0.0, 1.0, 20):
-        tcp_position = (
-            (1.0 - alpha) * start + alpha * end
+    if obstacle is not None:
+        print("\nRouting Bow Around Obstacle")
+        waypoint_position = (
+            generate_avoidance_waypoint(start, end, obstacle)
         )
 
-        obstacle = bow_collision_obstacle(
-            tcp_position,
-            bow_direction
+        waypoint_pose = (
+            pose_with_position(pose, waypoint_position)
         )
 
-        if obstacle is not None:
-            print(
-                "Bow Collsion Risk Detecetd Near Obstacle: ",
-                obstacle
-            )
-
-            waypoint_position = generate_avoidance_waypoint(
-                start,
-                end,
-                obstacle
-            )
-
-            waypoint_pose = pose_with_position(
-                pose,
-                waypoint_position
-            )
-
-            print(
-                "Routing Bow Through Waypoint: ",
-                waypoint_position
-            )
-
-            moveL(
-                waypoint_pose,
-                velocity,
-                acceleration
-            )
-
-            moveL(
-                pose,
-                velocity,
-                acceleration
-            )
-
-            return
-
-        print("Path Clear")
+        print("Routing Bow Around Obstacle")
 
         moveL(
-            pose,
-            velocity,
+            waypoint_pose.tolist(),
+            speed,
             acceleration
         )
+
+        moveL(
+            pose.tolist(),
+            speed,
+            acceleration
+        )
+
+        return
+
+    print("Path Clear")
+
+    moveL(
+        pose.tolist(),
+        speed,
+        acceleration
+    )
 
 
 def servoJ(
@@ -351,38 +536,15 @@ def servoJ(
     ):
     print("\nMoving...")
 
-    joints = as_list(joints)
+    joints = np.asarray(as_list(joints), dtype=float)
+
+    if joints.shape != (6,):
+        raise ValueError(
+            f"servoJ Expected 6 Joint Values, Got {joints}"
+        )
 
     if config.simulation:
-        target_pose = TxyzRxyz_2_Pose(joints)
-        solutions = robot.SolveIK_All(target_pose)
-        cols = len(solutions.Cols())
-
-        best = None
-        best_error = float ("inf")
-        current = np.array(robot.Joints().list(), dtype = float)
-
-        for i in range(cols):
-            q = np.array([
-                solutions[0, i],
-                solutions[1, i],
-                solutions[2, i],
-                solutions[3, i],
-                solutions[4, i],
-                solutions[5, i]
-            ], dtype = float)
-
-            error = np.linalg.norm(q - current)
-            
-            if error < best_error:
-                best_error = error
-                best = q
-            
-        if best is None:
-            print("IK Failed")
-            return
-        
-        robot.setJoints(best.tolist())
+        robot.setJoints(joints.tolist())
         return
 
     send_urscript(
@@ -394,7 +556,116 @@ def servoJ(
         f"lookahead_time = {lookahead_time}, "
         f"gain = {gain}"
         f")",
-        wait = dt
+        wait = 0.0
+    )
+
+def servoJ_trajectory(
+    joint,
+    amplitude_deg,
+    half_duration,
+    dt = 0.002,
+    lookahead_time = 0.1,
+    gain = 300
+):
+    if config.simulation:
+        raise RuntimeError(
+            "servoJ_trajectory is Only Implemented on the Real Robot"
+        )
+
+    if joint not in range(6):
+        raise ValueError(
+            "Joint Must Be Between 0 and 5"
+        )
+
+    if amplitude_deg == 0:
+        raise ValueError(
+            "amplitude_deg Can't Be 0"
+        )
+
+    if half_duration <= 0:
+        raise ValueError(
+            "half_duration Must Be Positive"
+        )
+
+    amplitude = np.deg2rad(amplitude_deg)
+    half_steps = max(
+        1,
+        round(half_duration / dt)
+    )
+
+    def target_expression(offset):
+        values = [
+            f"q_start[{i}]"
+            for i in range(6)
+        ]
+
+        values[joint] = (
+            f"q_start[{joint}] + ({offset})"
+        )
+
+        return("[" + ", ".join(values) + "]")
+
+    outbound = target_expression(
+        f"{amplitude:.10f} * blend"
+    )
+
+    inbound = target_expression(
+        f"{amplitude:.10f} * (1.0 - blend)"
+    )
+
+    start = target_expression("0.0")
+    script = f"""
+        def servoj_trajectory():
+            q_start = get_actual_joint_positions()
+            
+            i = 0
+            while i <= {half_steps}:
+                u = i / {float(half_steps):.1f}
+                blend = 10.0*u*u*u - 15.0*u*u*u*u + 6.0*u*u*u*u*u
+
+                servoj(
+                    {outbound},
+                    t = {dt:.4f},
+                    lookahead_time = {lookahead_time:.3f},
+                    gain = {gain}
+                )
+
+                i = i + 1
+            end
+
+            i = 0
+            while i <= {half_steps}:
+                u = i / {float(half_steps):.1f}
+                blend = 10.0*u*u*u - 15.0*u*u*u*u + 6.0*u*u*u*u*u
+
+                servoj(
+                    {inbound},
+                    t = {dt:.4f},
+                    lookahead_time = {lookahead_time:.3f},
+                    gain = {gain}
+                )
+
+                i = i + 1
+            end
+
+            i = 0
+            while i < 125:
+                servoj(
+                    {start},
+                    t = {dt:.4f},
+                    lookahead_time = {lookahead_time:.3f},
+                    gain = {gain}
+                )
+
+                i = i + 1
+            end
+
+            servoj_trajectory()
+    """
+
+    send_urscript(
+        script,
+        wait = 0.0
     )
 
 # Cartesian Jogging
@@ -402,6 +673,7 @@ last_motion = None
 
 def jogCartesian(selection_vector, wrench):
     global last_motion
+
     if config.simulation:
         pose = robot.Pose()
 
@@ -442,6 +714,52 @@ def jogCartesian(selection_vector, wrench):
 
         robot.MoveL(pose)
         return
+    
+    pose = np.asarray(getActualTCPPose(), dtype = float).copy()
+
+    vx = vy = vz = 0.0
+    rx = ry = rz = 0.0
+
+    motion = ""
+
+    speed_xyz = arm_config.speed
+    speed_rot = arm_config.joint_speed
+
+    if selection_vector[0]:
+        vx = np.sign(wrench[0]) * speed_xyz
+        motion += "+X" if vx > 0 else "-X"
+    if selection_vector[1]:
+        vy = np.sign(wrench[1]) * speed_xyz
+        motion += "+Y" if vy > 0 else "-Y"
+    if selection_vector[2]:
+        vz = np.sign(wrench[2]) * speed_xyz
+        motion += "+Z" if vz > 0 else "-Z"
+    if selection_vector[3]:
+        rx = np.sign(wrench[3]) * speed_rot
+        motion += "+Roll" if rx > 0 else "-Roll"
+    if selection_vector[4]:
+        ry = np.sign(wrench[4]) * speed_rot
+        motion += "+Pitch" if ry > 0 else "-Pitch"
+    if selection_vector[5]:
+        rz = np.sign(wrench[5]) * speed_rot
+        motion += "+Yaw" if rz > 0 else "-Yaw"
+
+    motion = motion.strip()
+
+    if motion != last_motion:
+        print(f"Moving in {motion}")
+        last_motion = motion
+
+    send_urscript(
+        f"speedl("
+        f"[{vx}, {vy}, {vz}, {rx}, {ry}, {rz}], "
+        f"{arm_config.acceleration}, "
+        f"0.1"
+        f")",
+        wait = 0.0
+    )
+
+    
     return
 
 # Force Control
@@ -499,7 +817,7 @@ def forceMode_scaled(
         force_constant = force_constant
     )
 
-    force_wrench = list(wrench)
+    force_wrench = list(as_list(wrench))
     force_wrench[0] = 0.0
     force_wrench[1] = 0.0
     force_wrench[2] = force_z
@@ -507,15 +825,29 @@ def forceMode_scaled(
     force_wrench[4] = 0.0
     force_wrench[5] = 0.0
 
-    rtde_r.set_force_parameters(
-        task_frame,
-        selection_vector,
-        force_wrench,
-        arm_config.force_type,
-        limits
+    force_task_frame = np.asarray(task_frame, dtype=float).copy()
+    force_task_frame[:3] /= 1000.0
+    force_task_frame[3:6] = np.deg2rad(force_task_frame[3:6])
+
+    script = (
+        "force_mode("
+        f"{format_pose(force_task_frame)}, "
+        f"{format_vector(selection_vector)}, "
+        f"{format_vector(force_wrench)}, "
+        f"{arm_config.force_type}, "
+        f"{format_vector(limits)}"
+        ")"
     )
 
-    rtde_r.set_force_mode(True)
+    print(
+        f"Scaled Force: {force_z:.3f} N "
+        f"(Distance From Frog: {distance:.3f} m)"
+    )
+
+    send_urscript(
+        script,
+        wait = 0.0
+    )
 
 def forceModeStop():
     if config.simulation:
@@ -667,17 +999,25 @@ def scale_force_with_distance(
     distance_from_frog,
     force_constant
 ):
-    force = desired_force + force_constant * distance_from_frog
-    # + damping_constant * velocity
+    force = desired_force - force_constant * distance_from_frog
+    # + damping_constant * speed
 
     return force
 
 
 # Collision Avoidance
+def point_box_distance(point, obstacle):
+    point = np.asarray(point, dtype=float)
+    minimum = np.asarray(obstacle["min"], dtype=float)
+    maximum = np.asarray(obstacle["max"], dtype=float)
+    closest = np.maximum(minimum, np.minimum(point, maximum))
+
+    return np.linalg.norm(point-closest)
+
 def point_line_distance(point, start, end):
-    point = np.asarray(point, dtype = float)
-    start = np.asarray(start, dtype = float)
-    end = np.asarray(end, dtype = float)
+    point = np.asarray(point, dtype=float)
+    start = np.asarray(start, dtype=float)
+    end = np.asarray(end, dtype=float)
 
     line = end - start
     line_length_sq = np.dot(line, line)
@@ -731,72 +1071,170 @@ def bow_line(
 
     return tcp_position, bow_tip
 
-
+def get_obstacles():
+    if config.simulation:
+        return cal.simulation.get(
+            "obstacles",
+            []
+        )
+    return cal.real.get("obstacles", [])
 def find_collision_obstacle(
         start,
         end,
         safety_distance = None,
-        num_samples = 50
+        sample_spacing = None
 ):
-    start = np.asarray(start, dtype = float)
-    end = np.asarray(end, dtype = float)
+    start = np.asarray(start, dtype=float)
+    end = np.asarray(end, dtype=float)
 
     if safety_distance is None:
         safety_distance = arm_config.collision_radius
 
-    bow_direction = get_bow_direction()
+    if sample_spacing is None:
+        sample_spacing = arm_config.sample_spacing
 
-    for alpha in np.linspace(0.0, 1.0, num_samples):
-        tcp_position = ((1.0-alpha)* start + alpha * end)
+    path_length = np.linalg.norm(end - start)
 
-    for obstacle in arm_config.obstacles:
-        obstacle = np.asarray(obstacle, dtype = float)
-        tcp_distance = np.linalg.norm(obstacle - tcp_position)
-
-        if tcp_distance < safety_distance:
-            print(
-                "TCP Collision Detected: ",
-                obstacle,
-                "distance: ",
-                tcp_distance
-            )
-
-            return obstacle
-
-    
-    bow_start, bow_end = bow_line(
-        tcp_position,
-        bow_direction
+    if path_length < 1e-9:
+        num_samples = 1
+    else: num_samples = max(
+        2,
+        int(np.ceil(path_length / sample_spacing)) + 1
     )
 
-    for obstacle in arm_config.obstacles:
-        obstacle = np.asarray(
-            obstacle,
-            dtype = float
-        )
+    for alpha in np.linspace(
+        0.0,
+        1.0,
+        num_samples
+    ):
+        tcp_position = ((1.0 - alpha) * start + alpha * end)
 
-        bow_distance = point_line_distance(
-            obstacle,
-            bow_start,
-            bow_end
-        )
-
-        if bow_distance < safety_distance:
-            print(
-                "Bow Collision Detected: ",
+        for obstacle in get_obstacles():
+            if not isinstance(
                 obstacle,
-                "Distance: ",
-                bow_distance
+                dict
+            ):
+                continue
+
+            distance = point_box_distance(
+                tcp_position,
+                obstacle
             )
 
-            return obstacle
+            if distance < safety_distance:
+                print("\nTCP Collision Detected")
+                print("Obstacle:", obstacle)
+                print("Distance:", distance)
+
+                return obstacle
+    return None
+
+def find_bow_collision(
+        start_pose,
+        end_pose,
+        safety_distance = None,
+        sample_spacing = None
+):
+    start_pose = np.asarray(start_pose, dtype = float)
+    end_pose = np.asarray(end_pose, dtype=float)
+
+    if start_pose.shape != (6,):
+        raise ValueError("find_bow_collision start_pose Must Contain 6 Values")
+
+    if end_pose.shape != (6,):
+            raise ValueError("find_bow_collision end_pose Must Contain 6 Values")
+
+    if safety_distance is None:
+        safety_distance = (arm_config.collision_radius)
+
+    if sample_spacing is None:
+        sample_spacing =(arm_config.sample_spacing)
+
+    start_position = start_pose[:3]
+    end_position = end_pose[:3]
+
+    path_length = np.linalg.norm(end_position - start_position)
+
+    if path_length < 1e-9:
+        num_samples = 1
+    else:
+        num_samples = max(
+            2,
+            int(np.ceil(path_length/sample_spacing) + 1)
+        )
+
+    start_rotvec = start_pose[3:6]
+    end_rotvec = end_pose[3:6]
+
+    for alpha in np.linspace(
+        0.0,
+        1.0,
+        num_samples
+    ):
+        tcp_position = (
+            (1.0 - alpha) * start_position + alpha * end_position
+        )
+
+        rotvec = (
+            (1.0 - alpha) * start_rotvec + alpha * end_rotvec
+        )
+
+        R_tcp = Rotation.from_rotvec(rotvec).as_matrix()
+
+        bow_direction = (
+            R_tcp @ np.array([
+                -1.0,
+                0.0,
+                0.0
+            ])
+        )
+
+        bow_direction /= np.linalg.norm(bow_direction)
+
+        bow_start = tcp_position.copy()
+
+        bow_end = (bow_start + bow_direction * arm_config.bow_length)
+
+        bow_length = np.linalg.norm(bow_end - bow_start)
+
+        bow_samples = max(
+            2,
+            int(np.ceil(bow_length / sample_spacing)) + 1
+        )
+
+        for beta in np.linspace(
+            0.0,
+            1.0,
+            bow_samples
+        ):
+            bow_point = (
+                (1.0 - beta) * bow_start + beta * bow_end
+            )
+
+            for obstacle in get_obstacles():
+                if not isinstance(obstacle, dict):
+                    continue
+
+                minimum = np.asarray(obstacle["min"], dtype=float)
+                maximum = np.asarray(obstacle["max"], dtype=float)
+                closest = np.maximum(minimum, np.minimum(bow_point, maximum))
+
+                distance = np.linalg.norm(bow_point - closest)
+
+                if distance < safety_distance:
+                    print("\nBow Collision Detected")
+                    print("Bow Point:", np.round(bow_point, 2))
+                    print("Obstacle:", obstacle)
+                    print("Distance:", distance)
+                    return obstacle
 
     return None
 
 def generate_avoidance_waypoint(start, end, obstacle):
-    start = np.asarray(start, dtype = float)
-    end = np.asarray(end, dtype = float)
-    obstacle = np.asarray(obstacle, dtype = float)
+    start = np.asarray(start, dtype=float)
+    end = np.asarray(end, dtype=float)
+    minimum = np.asarray(obstacle["min"], dtype=float)
+    maximum = np.asarray(obstacle["max"], dtype=float)
 
     direction = end - start
     direction_norm = np.linalg.norm(direction)
@@ -805,37 +1243,47 @@ def generate_avoidance_waypoint(start, end, obstacle):
         return start.copy()
 
     direction = direction / direction_norm
-    obstacle_relative = obstacle - start
+    center = (minimum + maximum) / 2.0
 
     projection = np.dot(
-        obstacle_relative,
+        center - start,
         direction
     )
 
     closest = start + projection * direction
-    away = closest - obstacle
-    away_norm = np.linalg.norm(away)
 
-    if away_norm < 1e-9:
-        axes = [
-            np.array([1.0, 0.0, 0.0]),
-            np.array([0.0, 1.0, 0.0]),
-            np.array([0.0, 0.0, 1.0])
-        ]
+    distances = np.array([
+        abs(closest[0] - minimum[0]),
+        abs(maximum[0] - closest[0]),
+        abs(closest[1] - minimum[1]),
+        abs(maximum[1] - closest[1]),
+        abs(closest[2] - minimum[2]),
+        abs(maximum[2] - closest[2]),
+    ])
 
-        reference = min(
-            axes,
-            key = lambda axis: abs(np.dot(axis, direction))
-        )
-
-        away = np.cross(direction, reference)
-        away_norm = np.linalg.norm(away)
-
-    away = away / away_norm
-
-    waypoint = closest + away * (
+    face = int(np.argmin(distances))
+    waypoint = closest.copy()
+    margin = (
         arm_config.collision_radius + arm_config.waypoint_offset
     )
+
+    if face == 0:
+        waypoint[0] = minimum[0] - margin
+
+    elif face == 1:
+        waypoint[0] = maximum[0] + margin
+
+    elif face == 2:
+        waypoint[1] = minimum[1] - margin
+
+    elif face == 3:
+        waypoint[1] = maximum[1] + margin
+
+    elif face == 4:
+        waypoint[2] = minimum[2] - margin
+
+    elif face == 5:
+        waypoint[2] = maximum[2] + margin
 
     return waypoint
 
@@ -870,6 +1318,7 @@ def bowing_segment(
             arm_config.bow_speed,
             arm_config.bow_acceleration
         )
+
         return
 
     if rosin:
@@ -881,21 +1330,20 @@ def bowing_segment(
         wrench = arm_config.rosin_wrench
         limits = arm_config.rosin_limits
     else:
+        current_string = arm_config.current_string
         task_frame = np.asarray(
-            arm_config.task_frames[
-                arm_config.current_string
-            ],
+            arm_config.task_frames[current_string],
             dtype = float
         )
         selection_vector = arm_config.selection_vector
         wrench = arm_config.wrench
         limits = arm_config.limits
 
-    start_pose = np.asarray(as_list(start_pose), dtype = float)
-    end_pose = np.asarray(as_list(end_pose), dtype = float)
+    start_pose = np.asarray(as_list(start_pose), dtype=float)
+    end_pose = np.asarray(as_list(end_pose), dtype=float)
 
-    start_joints = np.asarray(start_joints, dtype = float)
-    end_joints = np.asarray(end_joints, dtype = float)
+    start_joints = np.asarray(start_joints, dtype=float)
+    end_joints = np.asarray(end_joints, dtype=float)
 
     if start_pose.shape != (6,):
         raise ValueError("Starting Pose Must Containg 6 Values")
@@ -908,6 +1356,69 @@ def bowing_segment(
 
     if end_joints.shape != (6,):
         raise ValueError("Ending Joints Must Containg 6 Values")
+
+    obstacle = find_bow_collision(
+        start_pose,
+        end_pose
+    )
+
+    if obstacle is not None:
+        print("\nBow Stroke Blocked by Obstacle")
+
+        waypoint_position = (
+            generate_avoidance_waypoint(
+                start_pose[:3],
+                end_pose[:3],
+                obstacle
+            )
+        )
+
+        waypoint_pose = pose_with_position(
+            end_pose,
+            waypoint_position
+        )
+
+        print(
+            "Routing Bow Through Waypoint:",
+            waypoint_position
+        )
+
+        moveL(
+            waypoint_pose.tolist(),
+            arm_config.speed,
+            arm_config.acceleration
+        )
+
+        moveL(
+            end_pose.tolist(),
+            arm_config.speed,
+            arm_config.acceleration
+        )
+
+        return
+
+    if arm_config.useForce:
+        if rosin:
+            forceMode_scaled(
+                task_frame,
+                selection_vector,
+                wrench,
+                limits,
+                arm_config.force_constant,
+                arm_config.bow_force,
+                rosin = True
+            )
+        else:
+            forceMode_scaled(
+                task_frame,
+                selection_vector,
+                wrench,
+                limits,
+                arm_config.force_constant,
+                arm_config.bow_force,
+                rosin = False,
+                string = current_string
+            )
 
     target_pose = end_pose.copy()
     target_pose[:3] /= 1000.0
@@ -923,27 +1434,15 @@ def bowing_segment(
         f"v = {arm_config.bow_speed})"
     )
 
+    send_urscript(stroke, wait = 0.01)
+    wait_pose(target_pose)
+
     if arm_config.useForce:
-        script = (
-            "force_mode("
-            f"{format_pose(force_task_frame)}, "
-            f"{format_vector(selection_vector)}, "
-            f"{format_vector(wrench)}, "
-            f"{arm_config.force_type}, "
-            f"{format_vector(limits)}"
-            ")\n"
-            f"{stroke}\n"
-            "end_force_mode()\n"
+        send_urscript(
+            "end_force_mode()",
+            wait = 0.0
         )
 
-        send_urscript(script, wait = 0.01)
-        wait_pose(target_pose)
-
-    else:
-        script = stroke
-        send_urscript(script, wait = 0.01)
-        wait_pose(target_pose)
-    
 
 
 
@@ -964,7 +1463,7 @@ def bowing_segment(
         #     servoJ(
         #         joints.tolist(),
         #         arm_config.bow_acceleration,
-        #         arm_config.bow_velocity,
+        #         arm_config.bow_speed,
         #         arm_config.dt,
         #         arm_config.lookahead_time,
         #         arm_config.gain

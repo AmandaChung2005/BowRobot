@@ -11,13 +11,11 @@ cal = arm_config.data
 
 # Start User Interface
 user.start_interface()
-
-user.wait_for_enter("Program Started")
-
+print("Program Started")
 
 # Move to Home
+user.beep()
 user.wait_for_enter("Move to Home")
-
 
 robot.moveJ(
     arm_config.home_joints,
@@ -25,13 +23,13 @@ robot.moveJ(
     arm_config.joint_acceleration
 )
 
-
 time.sleep(0.02)
 
 at_violin_hover = False
 
 while True:
     # Select Bowing Type
+    user.beep()
     bow = user.select_bowing_type()
 
 
@@ -50,6 +48,7 @@ while True:
         )
 
         while True:
+            user.beep()
             user.wait_for_enter("Move Onto Rosin")
 
             robot.moveJ(
@@ -58,6 +57,7 @@ while True:
                 arm_config.joint_acceleration
             )
 
+            user.beep()
             user.wait_for_enter("Rosin Bow")
 
             for _ in range(arm_config.rosin_cycles):
@@ -77,7 +77,7 @@ while True:
                     rosin = True
                 )
 
-
+            user.beep()
             user.wait_for_enter("Lift Bow")
 
             robot.moveL(
@@ -92,10 +92,11 @@ while True:
     elif bow in ("basic", "spiccato"):
         # Move to Above String
         if not at_violin_hover:
+            user.beep()
             user.wait_for_enter("Move Above String")
 
-            robot.moveJ(
-                cal["violin_hover_joints"],
+            robot.moveL_safe(
+                cal["violin_hover_position"],
                 arm_config.speed,
                 arm_config.acceleration
             )
@@ -106,22 +107,25 @@ while True:
             start_pos = user.select_start_position()
 
             # Move onto String Position
+            user.beep()
             user.wait_for_enter("Move Onto String")      
 
             if start_pos == "middle":
-                robot.moveJ(
+                middle_joints = (robot.get_middle_joints(current_string))
+                robot.moveJ_safe(
                     robot.get_middle_joints(current_string),
                     arm_config.speed,
                     arm_config.acceleration
                 )
             else:
-                robot.moveJ(
+                robot.moveJ_safe(
                     cal["joint_paths"][current_string][start_pos],
                     arm_config.speed,
                     arm_config.acceleration
                 )
 
             # Basic Bowing
+            user.beep()
             user.wait_for_enter("Start Bowing")
 
             basic_cartesian_path, basic_joint_path = path.basic(
@@ -143,6 +147,7 @@ while True:
             current_string = user.select_string()
 
             # Move onto String Position
+            user.beep()
             user.wait_for_enter("Move Onto String")          
 
             spiccato_cartesian_path, spiccato_joint_path = path.spiccato(current_string)
@@ -161,6 +166,7 @@ while True:
             # )
 
             # Spiccato Bowing
+            user.beep()
             user.wait_for_enter("Start Bowing")
 
             for _ in range(arm_config.spiccato_cycles):
@@ -176,6 +182,7 @@ while True:
         robot.stop()
 
         # Move Bow Out of the Way
+        user.beep()
         user.wait_for_enter("Lift Bow")
 
         robot.moveJ(
@@ -187,6 +194,7 @@ while True:
         at_violin_hover = True
 
     if not user.yes_no("\nAnother Task (y/n)? "):
+        user.beep()
         user.wait_for_enter("Return Home")
 
         robot.moveJ(

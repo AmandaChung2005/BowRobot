@@ -1,7 +1,7 @@
-# Program Parameters
-current_string = "E"   # G, D, A, E
-start_pos = "frog"     # frog, middle, tip
-start_dir = "upbow"    # upbow, downbow
+# Program Parameters (set in "run.py")
+current_string = ""
+start_pos = ""
+start_dir = ""
 bowing_cycles = 3
 rosin_cycles = 1
 
@@ -17,11 +17,11 @@ step_rot = 10              # deg
 # Bowing Parameters
 bow_speed = 0.10         # rad/s
 bow_acceleration = 0.2   # rad/s^2
-bow_force = -3.0         # N
+bow_force = -1.0         # N
 force_constant = 1.0
 
 # Rosin Parameters
-rosin_hover = 50                             # mm
+rosin_hover = 50     # mm
 rosin_selection_vector = [0, 0, 1, 0, 0, 0]
 rosin_wrench = [
     0, 0, -2,   # N
@@ -31,9 +31,6 @@ rosin_limits = [
     2, 2, 2,    # m/s
     1, 1, 1     #rad/s
 ] 
-
-
-# rosin_fraction > 0.865 < 0.87
 
 # Spiccato Parameters
 spiccato_offset = 100    # mm from frog
@@ -49,9 +46,9 @@ gain = 300             # unitless
 dt = 1.0/500.0         # s
 
 # Force Control
-useForce = True
+useForce = None
 force_type = 2
-selection_vector = [1, 0, 1, 0, 0, 0]  # Z-Axis Force Control
+selection_vector = [0, 0, 1, 0, 0, 0]  # Z-Axis Force Control
 wrench = [
     0, 0, 1,  # N
     0, 0, 0    # Nm
@@ -72,9 +69,12 @@ obstacles = [
 collision_radius = 50      # mm
 avoidance_distance = 100   # mm
 waypoint_offset = 100      # mm
+sample_spacing = 15.0
+tcp_radius = 50
 
 # Calibration
 import arm_control.calibration_data as calibration_data
+
 import config
 
 if config.simulation:
@@ -104,9 +104,9 @@ task_frames = {
 rosin_frog = np.array(rosin_position["frog"], dtype = float)
 
 rosin_task_frame = [
-    rosin_frog[0]/1000.0,
-    rosin_frog[1]/1000.0,
-    rosin_frog[2]/1000.0,
+    rosin_frog[0],
+    rosin_frog[1],
+    rosin_frog[2],
     0,
     0,
     0

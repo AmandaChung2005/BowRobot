@@ -1,7 +1,8 @@
 # Settings
-simulation = False   # True = RoboDK, False = Real UR7e
-setup = False        # True = Get Coordinates, False = Run Program
-
+simulation = None
+setup = None
+keyboard = None
+beep = None
 
 
 robotName = "UR7e"

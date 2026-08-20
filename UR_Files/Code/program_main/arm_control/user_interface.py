@@ -1,7 +1,9 @@
 import sys
 import time
+import winsound
 from pynput.keyboard import Key, Listener
 
+import config
 from . import robot_interface_new as robot
 
 halt = False
@@ -131,3 +133,7 @@ def yes_no(prompt):
             return False
 
         print("invalid input, try again")
+
+def beep():
+    if config.beep:
+        winsound.Beep(500, 200)

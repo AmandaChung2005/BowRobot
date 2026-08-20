@@ -1,13 +1,34 @@
 import sys
 from pathlib import Path
-import numpy as np
 
 project_path = Path(__file__).resolve().parent
 sys.path.insert(0, str(project_path))
 
 import config
+import arm_control.arm_config as arm_config
 
+# Program Parameters
+config.simulation = False   # True = RoboDK, False = Real UR7e
+config.setup = False       # True = Get Coordinates, False = Run Program
+config.keyboard = False
+config.beep = True
+arm_config.useForce = False
+
+
+arm_config.current_string = "E"   # G, D, A, E
+arm_config.start_pos = "frog"     # frog, middle, tip
+arm_config.start_dir = "upbow"    # upbow, downbow
+
+
+arm_config.bowing_cycles = 3
+arm_config.rosin_cycles = 1
+
+# Run Program
 print("Python Program Started")
+
+if config.keyboard:
+    import arm_control.keyboard_control
+    sys.exit()
 
 if config.setup:
     print("\nStarting Calibration...")
@@ -17,13 +38,6 @@ if config.setup:
 else:
     import arm_control.robot_interface_new as robot
     print("RTDE Connected: ", robot.isConnected())
-
-    if not config.simulation:
-        print("RTDE Heartbeat Started")
-   
-        print("\nPress PLAY on Polyscope")
-        input("Press ENTER after Polyscope is running: ")
-
     print("\nStarting Main Program")
     import arm_control.main
 

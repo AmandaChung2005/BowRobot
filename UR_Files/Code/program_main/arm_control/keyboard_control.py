@@ -6,7 +6,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import arm_control.arm_config as arm_config
 import config
-import robot_interface as robot
+import arm_control.robot_interface_new as robot
 
 # RoboDK
 import sys
@@ -72,21 +72,22 @@ with Listener(on_press = pressed, on_release = released) as listener:
     else:
         connection_tries = 0
 
-        if not robot.rtde_c.isConnected():
+        if not robot.isConnected():
             while connection_tries < 3:
-                robot.rtde_c.reconnect()
+                print("Attempting Robot Connection...")
+                robot.reconnect()
                 time.sleep(0.1)
                 if robot.rtde_c.isConnected():
                   break
                 connection_tries += 1
 
-        if robot.rtde_c.isConnected():
+        if robot.isConnected():
             print("Robot Connection Successful!")
             print ("Press ENTER to start")
             print ("Press DELETE to stop")
         else:
             print ("Robot Connection Not Working, Try Again")
-            robot.rtde_c.stopScript()
+            sys.exit()
 
 
     # Force Mode Parameters
@@ -116,8 +117,6 @@ with Listener(on_press = pressed, on_release = released) as listener:
         print("Program Started")
         
         while commands["start"]:
-            t_start = robot.initPeriod()
-
             if commands["pause"]:
                 print("Program Paused")
                 print ("Press ENTER to resume")
@@ -130,6 +129,7 @@ with Listener(on_press = pressed, on_release = released) as listener:
 
                 for k in directions:
                     directions[k] = False
+                break
 
             if commands["halt"]:
                 print("Program Terminated")
@@ -138,48 +138,17 @@ with Listener(on_press = pressed, on_release = released) as listener:
                 sys.exit()
 
             if not any(directions.values()):
-                robot.stop()
+                time.sleep(0.01)
+                continue
 
-            else:
-                selection_vector = [0, 0, 0, 0, 0, 0]
-                wrench = [0, 0, 0, 0, 0, 0]
+            selection_vector = [0, 0, 0, 0, 0, 0]
+            wrench = [0, 0, 0, 0, 0, 0]
 
-                for key, (axis, force) in force_commands.items():
-                    if directions[key]:
-                        selection_vector[axis] = 1
-                        wrench[axis] += force
-                if config.simulation:
-                    robot.jogCartesian(selection_vector, wrench)
-                else:
-                    # robot.forceMode(
-                    #     config.task_frames[config.current_string],
-                    #     selection_vector,
-                    #     wrench,
-                    #     limits
-                    # )
+            for key, (axis, force) in force_commands.items():
+                if directions[key]:
+                    selection_vector[axis] = 1
+                    wrench[axis] += force
+            robot.jogCartesian(selection_vector, wrench)
 
-                    pose = robot.getActualTCPPose()
-
-                    step = 0.010  # 10 mm
-
-                    if directions["w"]:
-                        pose[1] += step
-                    if directions["s"]:
-                        pose[1] -= step
-                    if directions["a"]:
-                        pose[0] += step
-                    if directions["d"]:
-                        pose[0] -= step
-                    if directions["q"]:
-                        pose[2] += step
-                    if directions["e"]:
-                        pose[2] -= step
-
-                    robot.moveL(
-                        pose,
-                        0.05,
-                        0.1
-                    )
-
-            robot.waitPeriod(t_start)
+            time.sleep(0.01)
 

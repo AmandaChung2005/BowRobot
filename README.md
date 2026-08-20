@@ -62,6 +62,17 @@ python3.12 -m venv venv
 source ./venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## UR7e Setup
+Robot Network Settings:
+IP Address: 192.168.56.101
+Subnet Mask: 255.255.255.0
+
+Windows Ethernet Settings:
+IP Address: 192.168.56.100
+Subnet Mask: 255.255.255.0
+
+
 ## Running the Code
 Activate the virtual environment and run the desired script
 
