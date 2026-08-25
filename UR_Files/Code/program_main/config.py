@@ -3,6 +3,7 @@ simulation = None
 setup = None
 keyboard = None
 beep = None
+monitorForce = None
 
 
 robotName = "UR7e"

@@ -15,10 +15,13 @@ step_xyz = 5               # mm
 step_rot = 10              # deg
 
 # Bowing Parameters
-bow_speed = 0.10         # rad/s
+bow_speed = 0.10         # mm/s
 bow_acceleration = 0.2   # rad/s^2
-bow_force = -1.0         # N
-force_constant = 1.0
+bow_force = 1.0         # N
+force_constant = -3.0    # > 0 Increases force applied
+force_update_step_mm = 5.0
+force_prepare_speed = 0.01
+force_z_speed_limit = 1
 
 # Rosin Parameters
 rosin_hover = 50     # mm
@@ -48,13 +51,16 @@ dt = 1.0/500.0         # s
 # Force Control
 useForce = None
 force_type = 2
+max_force = 10
+force_tolerance = 0.01
+force_prepare_timeout = 5.0
 selection_vector = [0, 0, 1, 0, 0, 0]  # Z-Axis Force Control
 wrench = [
-    0, 0, 1,  # N
+    0, 0, -1,  # N
     0, 0, 0    # Nm
 ]
 limits = [
-    2, 2, 2,   # m/s
+    0.05, 0.05, 2,   # m/s
     1, 1, 1    # rad/s
 ] 
 
@@ -62,14 +68,11 @@ limits = [
 import numpy as np
 
 bow_length = 750           # mm  
-obstacles = [
-    np.array([])
-]
 
 collision_radius = 50      # mm
 avoidance_distance = 100   # mm
 waypoint_offset = 100      # mm
-sample_spacing = 15.0
+sample_spacing = 50.0
 tcp_radius = 50
 
 # Calibration
@@ -79,12 +82,11 @@ import config
 
 if config.simulation:
     data = calibration_data.simulation
-    home_position = [439.398, -133.300, 484.025, 0.000, 180.000, 0.000]   # mm
-    home_joints = [0.00, -90.00, -60.00, -120.00, 90.00, 90.00]           # deg
 else:
     data = calibration_data.real
-    home_position = [-492.7, 132.7, 489.5, 180.52, 0.19, -0.06]           # mm
-    home_joints = [180.00, -90.00, -90.00, -90.00, 90.00, 90.00]          # deg
+
+home_position = [-492.7, 132.7, 489.5, 180.52, 0.19, -0.06]      # mm
+home_joints = [180.00, -90.00, -90.00, -90.00, 90.00, 90.00]     # deg
 
 violin_hover_position = data["violin_hover_position"]
 violin_hover_joints = data["violin_hover_joints"]
@@ -96,18 +98,4 @@ string_paths = data["string_paths"]
 joint_paths = data["joint_paths"]
 
 
-task_frames = {
-    string: poses["frog"]
-    for string, poses in string_paths.items()
-}
-
-rosin_frog = np.array(rosin_position["frog"], dtype = float)
-
-rosin_task_frame = [
-    rosin_frog[0],
-    rosin_frog[1],
-    rosin_frog[2],
-    0,
-    0,
-    0
-]
+task_frame = {}

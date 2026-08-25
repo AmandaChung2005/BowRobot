@@ -14,15 +14,16 @@ The repository is organized as follows:
 ```text
 BowRobot/
 ├── AcousticData
-│   ├── Data             # Raw acoustic data
-│   ├── Functions        # Templates for analysis and plotting
-│   └── Analysis         # Scripts and experimental results
-├── Sensing              # Documentation for the project's sensors
-├── SW                   # Hardware files
+│   ├── Data                # Raw acoustic data
+│   ├── Functions           # Templates for analysis and plotting
+│   └── Analysis            # Scripts and experimental results
+├── Sensing                 # Documentation for the project's sensors
+├── SW                      # Hardware files
 ├── UR Files
-│   ├── Code             # Main source code directory
-│   └── UR7e             # Official Universal Robots documentation
-├── RoboDK Simulation    # Robot simulation models
+│   ├── Code                
+│   │   ├── program_main    # Main source code directory
+│   └── UR7e                # Official Universal Robots documentation
+├── RoboDK Simulation       # Robot simulation models
 └── README.md
 ```
 

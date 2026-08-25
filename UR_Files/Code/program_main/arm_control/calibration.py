@@ -32,26 +32,23 @@ def get_calibration_data():
 def get_robot_position():
     if config.simulation:
         joints = robot.Joints().list()
-
-        pose = list(Pose_2_TxyzRxyz(robot.pose()))
+        pose = list(Pose_2_TxyzRxyz(robot.Pose()))
+        pose[3:] = np.degrees(pose[3:]).tolist()
 
         return joints, pose
 
     else:
         joints = np.degrees(rtde_r.getActualQ()).tolist()
         pose = list(rtde_r.getActualTCPPose())
-
         pose[:3] = [
-            value * 1000.0 for value in pose[:3]
+            value * 1000.0
+            for value in pose[:3]
         ]
-
         pose[3:] = np.degrees(pose[3:]).tolist()
-        pose = [
-            float(value)
-            for value in pose
-        ]
+        
 
         return joints, pose
+
 
 def get_tcp_position():
     if config.simulation:
@@ -271,7 +268,7 @@ def calibrate_violin(data, section):
 
         if target == "hover":
             data["violin_hover_position"] = pose
-            data["violin_hover_joints"][target] = joints
+            data["violin_hover_joints"] = joints
 
             print(
                 f"\n{section.capitalize()} "
