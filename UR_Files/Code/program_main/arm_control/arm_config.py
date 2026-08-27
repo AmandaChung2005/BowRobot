@@ -15,13 +15,15 @@ step_xyz = 5               # mm
 step_rot = 10              # deg
 
 # Bowing Parameters
-bow_speed = 0.10         # mm/s
-bow_acceleration = 0.2   # rad/s^2
-bow_force = 1.0         # N
-force_constant = -3.0    # > 0 Increases force applied
+bow_speed = 0.05         # mm/s
+bow_acceleration = 0.1   # rad/s^2
+bow_force = 1         # N
+force_constant = -1.0    # > 0 Increases force applied
+force_gain_scaling = 1.6
+force_damping = 0.7
 force_update_step_mm = 5.0
 force_prepare_speed = 0.01
-force_z_speed_limit = 1
+force_z_speed_limit = 2
 
 # Rosin Parameters
 rosin_hover = 50     # mm
@@ -56,7 +58,7 @@ force_tolerance = 0.01
 force_prepare_timeout = 5.0
 selection_vector = [0, 0, 1, 0, 0, 0]  # Z-Axis Force Control
 wrench = [
-    0, 0, -1,  # N
+    0, 0, 1,  # N
     0, 0, 0    # Nm
 ]
 limits = [

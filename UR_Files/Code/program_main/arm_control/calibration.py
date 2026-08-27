@@ -387,7 +387,7 @@ def measure_obstacle():
 
     return obstacle
 
-def calibrate_obstacles():
+def calibrate_obstacles(data, section):
     while True:
         obstacle = measure_obstacle()
         if obstacle is None:

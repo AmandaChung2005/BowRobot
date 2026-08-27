@@ -68,18 +68,32 @@ def safe_input(prompt):
 def select_string():
     while True:
         string = safe_input(
-            "\nString (G, D, A, E): "
+            "\nString:\n"
+            " [G] G String\n"
+            " [D] D String\n"
+            " [A] A String\n"
+            " [E] E String\n"
+            " [X] Back\n"
+            "> "
         ).strip().upper()
 
         if string in ("G", "D", "A", "E"):
             return string
+
+        if string in ("X", "BACK"):
+            return None
         
         print ("Invalid string, try again")
 
 def select_start_position():
     while True:
         position = safe_input(
-            "\nStarting Position (frog, middle tip): "
+            "\nStarting Position:\n"
+            " [F] Frog\n"
+            " [M] Middle\n"
+            " [T] Tip\n"
+            " [X] Back\n"
+            "> "
         ).strip().lower()
 
         if position in ("f", "frog"):
@@ -91,11 +105,20 @@ def select_start_position():
         if position in ("t", "tip"):
             return "tip"
 
+        if position in ("x", "back"):
+            return None
+
         print("Invalid position, try again")
 
 def select_start_direction():
     while True:
-        direction = input("Select Start Direction (Upbow/Downbow): ").strip().lower()
+        direction = safe_input(
+            "\nSelect Start Direction:\n"
+            " [U] Upbow\n"
+            " [D] Downbow\n"
+            " [X] Back\n"
+            "> "
+        ).strip().lower()
 
         if direction in ("u", "upbow"):
             return "upbow"
@@ -103,12 +126,20 @@ def select_start_direction():
         if direction in ("d", "downbow"):
             return "downbow"
 
+        if direction in ("x", "back"):
+            return None
+
         print("Invalid Direction. Please Enter 'Upbow' or 'Downbow'")
 
 def select_bowing_type():
     while True:
         bow = safe_input(
-            "\nBowing Type (Rosin, Basic, Spiccato): "
+            "\nBowing Type:\n"
+            " [R] Rosin\n"
+            " [B] Basic\n"
+            " [S] Spiccato\n"
+            " [X] Back\n"
+            "> "
         ).strip().lower()
 
         if bow in ("b", "basic"):
@@ -120,6 +151,9 @@ def select_bowing_type():
         if bow in ("s", "spiccato"):
             return "spiccato"
 
+        if bow in ("x", "back"):
+            return None
+        
         print("Invalid input, try again")
 
 def yes_no(prompt):

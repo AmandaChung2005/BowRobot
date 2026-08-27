@@ -4,6 +4,7 @@ setup = None
 keyboard = None
 beep = None
 monitorForce = None
+avoidObstacles = None
 
 
 robotName = "UR7e"

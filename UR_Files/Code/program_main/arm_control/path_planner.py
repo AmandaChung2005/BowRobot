@@ -36,7 +36,7 @@ def lift_pose(pose, height):
     # return lift.tolist()
 
 # Basic Up and Down Bows
-def basic(current_string, start_pos):
+def basic(current_string, start_pos, start_dir = None):
     current_path = cal["string_paths"][current_string]
 
     frog_pose = np.array(current_path["frog"], dtype=float)
@@ -55,12 +55,12 @@ def basic(current_string, start_pos):
         
     elif start_pos == "middle":
 
-        if arm_config.start_dir == "upbow":
+        if start_dir == "upbow":
 
             basic_cartesian_path = [middle_pose, frog_pose, tip_pose, middle_pose]
             joint_names = ["middle", "frog", "tip", "middle"]
             
-        elif arm_config.start_dir == "downbow":
+        elif start_dir == "downbow":
 
             basic_cartesian_path = [middle_pose, tip_pose, frog_pose, middle_pose]
             joint_names = ["middle", "tip", "frog", "middle"]

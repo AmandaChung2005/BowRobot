@@ -196,84 +196,25 @@ def start_force_monitor(
 
                 commanded_force = -force_magnitude
 
-                raw_wrench = np.asarray(
+                measured_wrench = np.asarray(
                     rtde_r.getActualTCPForce(),
                     dtype = float
-                ).flatten()
+                ) - force_offset
 
                 R_task = Rotation.from_rotvec(
                     np.deg2rad(task_frame[3:6])
                 ).as_matrix()
 
-                task_z_axis_base = R_task[:, 2]
+                measured_force_base = measured_wrench[:3]
+                measured_force_task = R_task.T @ measured_force_base
+                measured_force = measured_force_task[2]
 
                 print(
-                    f"Task Z base = "
-                    f"[{task_z_axis_base[0]:+.3f}, "
-                    f"{task_z_axis_base[1]:+.3f}, "
-                    f"{task_z_axis_base[2]:+.3f}]",
-                    flush=True
-                )
-
-                raw_force_task = R_task.T @ raw_wrench[:3]
-
-                raw_task_z = float(raw_force_task[2])
-
-                corrected_wrench = raw_wrench - force_offset
-                corrected_force_task = R_task.T @ corrected_wrench[:3]
-                corrected_task_z = float(corrected_force_task[2])
-
-                tcp = np.asarray(
-                    rtde_r.getActualTCPPose(),
-                    dtype = float
-                ).flatten()
-
-                tcp_z = float(tcp[2])
-
-                tcp_speed = np.asarray(
-                    rtde_r.getActualTCPSpeed(),
-                    dtype = float
-                ).flatten()
-
-                tcp_linear_speed_base = tcp_speed[:3]
-                task_speed = R_task.T @ tcp_linear_speed_base
-
-                vx_task = task_speed[0]
-                vy_task = task_speed[1]
-                vz_task = task_speed[2]
-
-                tcp_velocity_task = R_task.T @ tcp_speed[:3]
-                task_vz = float(tcp_velocity_task[2])
-
-                offset_task = R_task.T @ force_offset[:3]
-                offset_task_z = float(offset_task[2])
-
-                print(
-                    f"Cmd: {float(commanded_force):+.3f} N | "
-                    f"Raw Fz: {raw_task_z:+.3f} N | "
-                    f"Offset FZ: {offset_task_z:+.3f} N | "
-                    f"Corrected Fz: {corrected_task_z:+.3f} N | "
-                    f"Z_base: {float(tcp[2]):+.4f} m | "
-                    f"VZ_base: {float(tcp_speed[2]):+.4f} m | "
-                    f"VZ_task: {vz_task:8.4f} m/s |"
-                    f"D: {float(distance):7.4f} m",
+                    f"Commanded: {commanded_force:7.3f} N | "
+                    f"Measured: {measured_force:7.3f} N | "
+                    f"Distance: {distance:7.4f} m",
                     flush = True
                 )
-
-                # print(
-                #     f"Commanded: {commanded_force:7.3f} N | "
-                #     f"Measured: {measured_force:7.3f} N | "
-                #     f"Distance: {distance:7.4f} m",
-                #     flush = True
-                # )
-
-                # tcp = np.asarray(rtde_r.getActualTCPPose(), dtype = float)
-
-                # print(
-                #     f"Z: {tcp[2]:.6f} m | "
-                #     f"Commanded: {commanded_force:.3f} N | "
-                #     f"Measured: {measured_force:.3f} N"
-                # )
 
             except Exception as e:
                 if not pause_event.is_set():
@@ -478,11 +419,6 @@ def moveJ_safe(
             f"moveJ_safe Expected 6 Pose Values, Got {target_pose}"
         )
 
-    if not config.avoidObstacles:
-        print("\nObstacle Avoidance OFF")
-        moveJ(joints.tolist(), speed, acceleration)
-        return True
-
     start_pose = current_pose_mm()
     end_pose = collision_pose(target_pose)
 
@@ -581,11 +517,6 @@ def moveL_safe(
 
     if pose.shape != (6,):
         raise ValueError("moveL_safe Expected 6 Pose Values")
-
-    if not config.avoidObstacles:
-        print("\nObstacle Avoidance OFF")
-        moveL(pose.tolist(), speed, acceleration)
-        return True
 
     start_pose = current_pose_mm()
     end_pose = collision_pose(pose)
@@ -916,252 +847,6 @@ def forceMode_scaled(
         f"(Distance: {distance:.3f} m)"
     )
 
-# def prepare_force(
-#         halt=False,
-#         rosin = False,
-#         task_frame = None
-#     ):
-
-#     if halt:
-#         stop()
-#         sys.exit()
-
-#     if config.simulation:
-#         return
-
-#     if task_frame is None:
-#         raise ValueError(
-#             "Task Frame Must Be Generated Before Bowing"
-#         )
-
-#     if rosin:
-#         selection_vector = arm_config.rosin_selection_vector
-#         wrench = arm_config.rosin_wrench
-#         limits = arm_config.rosin_limits
-#         frog_pose = np.asarray(
-#             arm_config.rosin_position["frog"],
-#             dtype = float
-#         )
-#         tip_pose = np.asarray(
-#             arm_config.rosin_position["tip"],
-#             dtype = float
-#         )
-
-#     else:
-#         selection_vector = arm_config.selection_vector
-#         wrench = arm_config.wrench
-#         limits = arm_config.limits
-#         frog_pose = np.asarray(
-#             arm_config.data["string_paths"]
-#             [arm_config.current_string]["frog"],
-#             dtype=float
-#         )
-
-#         tip_pose = np.asarray(
-#             arm_config.data["string_paths"]
-#             [arm_config.current_string]["tip"],
-#             dtype=float
-#         )
-
-#     distance = distance_from_frog(frog_pose, tip_pose)
-
-#     force_magnitude = arm_config.bow_force + arm_config.force_constant * distance
-
-#     force_magnitude = np.clip(
-#         force_magnitude,
-#         -arm_config.max_force,
-#         arm_config.max_force
-#     )
-
-#     force_z = -force_magnitude
-
-#     force_wrench = list(as_list(wrench))
-#     force_wrench[0] = 0.0
-#     force_wrench[1] = 0.0
-#     force_wrench[2] = force_z
-#     force_wrench[3] = 0.0
-#     force_wrench[4] = 0.0
-#     force_wrench[5] = 0.0
-
-#     ur_task_frame = np.asarray(task_frame, dtype = float).copy()
-#     ur_task_frame[:3] /= 1000.0
-#     ur_task_frame[3:6] = np.deg2rad(ur_task_frame[3:6])
-
-#     prepare_selection = [0, 0, 1, 0, 0, 0]
-#     prepare_wrench = [0, 0, force_z, 0, 0, 0]
-#     prepare_limits = list(as_list(limits))
-#     prepare_limits[2] = arm_config.force_z_speed_limit
-
-#     R_task = Rotation.from_rotvec(np.deg2rad(task_frame[3:6])).as_matrix()
-#     task_z = R_task[:, 2]
-
-#     tolerance = arm_config.force_tolerance
-#     timeout = arm_config.force_prepare_timeout
-
-#     bow_vector = tip_pose[:3] - frog_pose[:3]
-#     bow_length = np.linalg.norm(bow_vector)
-
-#     if bow_length < 1e-9:
-#         raise ValueError(
-#             "Frog and Tip Positions are Identical"
-#         )
-
-#     bow_direction = bow_vector / bow_length
-
-#     frog_x = frog_pose[0] / 1000.0
-#     frog_y = frog_pose[1] / 1000.0
-#     frog_z = frog_pose[2] / 1000.0
-
-#     bow_dir_x = bow_direction[0]
-#     bow_dir_y = bow_direction[1]
-#     bow_dir_z = bow_direction[2]
-
-#     bow_length_m = bow_length / 1000.0
-
-#     limits = list(as_list(limits))
-#     limits[2] = arm_config.force_z_speed_limit
-  
-#     print("\nPreparing Force Mode")
-
-#     send_urscript("write_output_integer_register(12, 0)", wait = 0.0)
-
-#     script = f"""
-# def prepare_force():
-#     thread force_controller():
-
-#         while True:
-#             actual = get_actual_tcp_pose()
-
-#             frog_dx = actual[0] - {frog_x:.10f}
-#             frog_dy = actual[1] - {frog_y:.10f}
-#             frog_dz = actual[2] - {frog_z:.10f}
-
-#             distance = (
-#                 frog_dx * {bow_dir_x:.10f}
-#                 + frog_dy * {bow_dir_y:.10f}
-#                 + frog_dz * {bow_dir_z:.10f}
-#             )
-
-#             if distance < 0.0:
-#                 distance = 0.0
-#             end
-
-#             if distance > {bow_length_m:.10f}:
-#                 distance = {bow_length_m:.10f}
-#             end
-
-#             force_magnitude = (
-#                 {arm_config.bow_force:.10f}
-#                 + {arm_config.force_constant:.10f} * distance
-#             )
-
-#             if force_magnitude < 0.0:
-#                 force_magnitude = 0.0
-#             end
-
-
-#             if force_magnitude > {arm_config.max_force:.10f}:
-#                 force_magnitude = {arm_config.max_force:.10f}
-#             end
-
-#             commanded_force = -force_magnitude
-
-#             force_mode(
-#                 {format_pose(ur_task_frame)},
-#                 {format_vector(selection_vector)},
-#                 [0, 0, commanded_force, 0, 0, 0],
-#                 {arm_config.force_type},
-#                 {format_vector(limits)}
-#             )
-
-#             sync()
-
-#         end
-#     end
-
-#     global force_handler = run force_controller()
-#     sleep(0.1)
-
-#     start_time = get_steptime()
-#     force_ready = False
-
-#     while True:
-#         tcp_force = get_tcp_force()
-
-#         task_force = (
-#             tcp_force[0] * {task_z[0]:.10f} +
-#             tcp_force[1] * {task_z[1]:.10f} +
-#             tcp_force[2] * {task_z[2]:.10f}
-#         )
-
-#         if abs (task_force - ({force_z:.10f})) <= {tolerance:.10f}:
-#             force_ready = True
-#             break
-#         end
-
-#         if get_steptime() - start_time > {timeout:.3f}:
-#             break
-#         end
-
-#         sync()
-#     end
-
-#     kill force_handler
-#     end_force_mode()
-
-#     if force_ready:
-#         write_output_integer_register(12, 1)
-#     else:
-#         write_output_integer_register(12, 2)
-#     end
-
-# end
-
-# prepare_force()
-# """
-
-
-#     # script = f"""
-#     # force_mode(
-#     #     {format_pose(ur_task_frame)},
-#     #     {format_vector(selection_vector)},
-#     #     {format_vector(force_wrench)},
-#     #     {arm_config.force_type},
-#     #     {format_vector(limits)}
-#     # )
-
-#     # movel(
-#     #     {format_pose(ur_target_pose)},
-#     #     a = {arm_config.bow_acceleration},
-#     #     v = {arm_config.bow_speed}
-#     # )
-
-#     # end_force_mode()
-#     # """
-
-#     send_urscript(
-#         script,
-#         wait = 0.0
-#     )
-
-#     start_time = time.time()
-
-#     while time.time() - start_time < timeout + 2.0:
-#         value = rtde_r.getOutputIntRegister(12)
-
-#         if value == 1:
-#             print(f"Force Prepared: (force_z:.3f) N")
-#             return True
-#         if value == 2:
-#             print("Force Preparation Failed")
-#             return False
-#         time.sleep(0.01)
-
-#     print("Force Preparation Timed Out")
-
-#     return False
-
-
 def prepare_force(
     task_frame,
     selection_vector,
@@ -1176,14 +861,16 @@ def prepare_force(
         return True
 
     distance = distance_from_frog(frog_pose, tip_pose)
-    force_magnitude = desired_force + force_constant * distance
-    force_magnitude = np.clip(
-        force_magnitude,
-        0.0,
+    force_z = scale_force_with_distance(
+        desired_force = desired_force,
+        distance_from_frog = distance,
+        force_constant = force_constant
+    )
+    force_z = np.clip(
+        force_z,
+        -arm_config.max_force,
         arm_config.max_force
     )
-
-    force_z = -force_magnitude
 
     force_wrench = list(as_list(wrench))
     force_wrench[0] = 0.0
@@ -1205,42 +892,38 @@ def prepare_force(
     ).as_matrix()
 
     task_z = R_task[:, 2]
-    task_z_x = float(task_z[0])
-    task_z_y = float(task_z[1])
-    task_z_z = float(task_z[2])
 
-    prepare_wrench = [0, 0, force_z, 0, 0, 0]
-    prepare_limits = list(as_list(limits))
-    prepare_limits[2] = arm_config.force_z_speed_limit
 
-    send_urscript("write_output_integer_Register(12, 0)", wait = 0.0)
+    print("\nPreparing Force Mode")
+
+    send_urscript(
+        "write_output_integer_register(12, 0)",
+        wait = 0.0
+    )
 
     script = f"""
-def prepare_force():
-    force_mode_set_gain_scaling({arm_config.force_gain_scaling})
-    force_mode_set_damping({arm_config.force_damping})
+    def prepare_force():
     
-    force_mode(
-        {format_pose(ur_task_frame)},
-        [0, 0, 1, 0, 0, 0],
-        [0, 0, {force_z:.8f}, 0, 0, 0],
-        {arm_config.force_type},
-        {format_vector(prepare_limits)}
-    )
+        force_mode(
+            {format_pose(ur_task_frame)},
+            {format_vector(selection_vector)},
+            {format_vector(force_wrench)},
+            {arm_config.force_type},
+            {format_vector(limits)}
+        )
 
     start_time = get_steptime()
     force_ready = False
 
     while True:
         tcp_force = get_tcp_force()
-
         task_force = (
-        tcp_force[0] * {task_z_x:.10f} +
-        tcp_force[1] * {task_z_y:.10f} +
-        tcp_force[2] * {task_z_z:.10f}
+            tcp_force[0] * {task_z[0]:.10f} +
+            tcp_force[1] * {task_z[1]:.10f} +
+            tcp_force[2] * {task_z[2]:.10f}
         )
 
-        if abs (task_force - ({force_z:.10f})) <= {tolerance:.10f}:
+        if abs(task_force - {force_z:.8f}) <= {tolerance:.8f}:
             force_ready = True
             break
         end
@@ -1248,19 +931,19 @@ def prepare_force():
         if get_steptime() - start_time > {timeout:.3f}:
             break
         end
-
         sync()
     end
 
     if force_ready:
-        write_output_integer_register(12, 1)
+        write_output_integer_register(12,1)
     else:
+        end_force_mode()
+
         write_output_integer_register(12, 2)
     end
-    
-end
-prepare_force()
-"""
+
+    prepare_force()
+    """
 
     send_urscript(
         script,
@@ -2096,19 +1779,17 @@ def bowing_segment(
 
     distance = distance_from_frog(frog_pose, tip_pose)
 
-    force_magnitude = scale_force_with_distance(
+    force_z = scale_force_with_distance(
         desired_force = arm_config.bow_force,
         distance_from_frog = distance,
         force_constant = arm_config.force_constant
     )
 
-    force_magnitude = np.clip(
-        force_magnitude,
+    force_z = np.clip(
+        force_z,
         -arm_config.max_force,
         arm_config.max_force
     )
-
-    force_z = -force_magnitude
 
     force_wrench = list(as_list(wrench))
     force_wrench[0] = 0.0
@@ -2148,10 +1829,7 @@ def bowing_segment(
     print("\nBowing")
 
     script = f"""
-def bowing_segment():
-    force_mode_set_gain_scaling({arm_config.force_gain_scaling})
-    force_mode_set_damping({arm_config.force_damping})
-
+def bow_segment():
     thread force_controller():
 
         while True:
@@ -2218,7 +1896,7 @@ def bowing_segment():
 
 end
 
-bowing_segment()
+bow_segment()
 """
 
 

@@ -39,6 +39,8 @@ while True:
     user.beep()
     bow = user.select_bowing_type()
 
+    if bow is None:
+        continue
 
     if bow == "rosin":
         user.beep()
@@ -74,134 +76,9 @@ while True:
             )
 
             task_frame = robot.generate_task_frame()
-
-            user.beep()
-            user.wait_for_enter("Rosin Bow")
-
-            for _ in range(arm_config.rosin_cycles):
-                robot.bowing_segment(
-                    cal["rosin_position"]["tip"],
-                    cal["rosin_position"]["frog"],
-                    cal["rosin_joints"]["tip"],
-                    cal["rosin_joints"]["frog"],
-                    task_frame = task_frame,
-                    rosin = True
-                )
-
-                robot.bowing_segment(
-                    cal["rosin_position"]["frog"],
-                    cal["rosin_position"]["tip"],
-                    cal["rosin_joints"]["frog"],
-                    cal["rosin_joints"]["tip"],
-                    task_frame = task_frame,
-                    rosin = True
-                )
-
-            user.beep()
-            user.wait_for_enter("Lift Bow")
-
-            robot.moveL(
-                hover_pose,
-                arm_config.speed,
-                arm_config.acceleration
-            )
-
-            if user.yes_no("\nEnough Rosin(y/n)? "):
-                break
-
-    elif bow in ("basic", "spiccato"):
-        # Move to Above String
-        if not at_violin_hover:
-            user.beep()
-            user.wait_for_enter("Move Above String")
-
-            robot.moveJ_safe(
-                cal["violin_hover_joints"],
-                arm_config.speed,
-                arm_config.acceleration,  
-                cal["violin_hover_position"]
-            )
-
-        force_offset = robot.zero_force_sensor()
-        robot.set_force_offset(force_offset)
-
-
-        if bow == "basic":
-            current_string = user.select_string()
-            start_pos = user.select_start_position()
-
-            # Move onto String Position
-            user.beep()
-            user.wait_for_enter("Move Onto String")      
-
-            if start_pos == "middle":
-                middle_pose = robot.get_middle_pose(current_string)
-                middle_joints = robot.get_middle_joints(current_string)
-
-                print("\n=== MIDDLE MOVE DEBUG ===")
-
-                print(
-                    "Expected Middle Pose (mm/deg):"
-                )
-                print(
-                    np.round(
-                        middle_pose,
-                        3
-                    )
-                )
-
-                print(
-                    "\nCalculated Middle Joints (deg):"
-                )
-                print(
-                    np.round(
-                        middle_joints,
-                        3
-                    )
-                )
-
-                robot.moveJ(
-                    middle_joints,
-                    arm_config.speed,
-                    arm_config.acceleration
-                )
-
-                actual_middle_pose = np.asarray(
-                    robot.getActualTCPPose(),
-                    dtype=float
-                ).copy()
-
-                print(
-                    "\nActual TCP After Middle Move:"
-                )
-                print(
-                    np.round(
-                        actual_middle_pose,
-                        3
-                    )
-                )
-
-                print(
-                    "\nMiddle Position Error (mm):"
-                )
-                print(
-                    np.linalg.norm(
-                        actual_middle_pose[:3]
-                        - middle_pose[:3]
-                    )
-                )
-
-            else:
-                robot.moveJ(
-                    cal["joint_paths"][current_string][start_pos],
-                    arm_config.speed,
-                    arm_config.acceleration
-                )
-
-            task_frame = robot.generate_task_frame()
-
-            frog_pose = cal["string_paths"][current_string]["frog"]
-            tip_pose = cal["string_paths"][current_string]["tip"]
+                        
+            frog_pose = cal["rosin_position"]["frog"]
+            tip_pose = cal["rosin_position"]["tip"]
 
             force_monitor = None
 
@@ -272,6 +149,172 @@ while True:
                 if force_monitor is not None:
                     robot.pause_force_monitor(force_monitor)
 
+            user.beep()
+            user.wait_for_enter("Rosin Bow")
+
+            if force_monitor is not None:
+                robot.resume_force_monitor(force_monitor)
+
+            for _ in range(arm_config.rosin_cycles):
+                robot.bowing_segment(
+                    cal["rosin_position"]["tip"],
+                    cal["rosin_position"]["frog"],
+                    cal["rosin_joints"]["tip"],
+                    cal["rosin_joints"]["frog"],
+                    task_frame = task_frame,
+                    rosin = True
+                )
+
+                robot.bowing_segment(
+                    cal["rosin_position"]["frog"],
+                    cal["rosin_position"]["tip"],
+                    cal["rosin_joints"]["frog"],
+                    cal["rosin_joints"]["tip"],
+                    task_frame = task_frame,
+                    rosin = True
+                )
+
+            if force_monitor is not None:
+                robot.stop_force_monitor(force_monitor)
+                force_monitor = None
+
+            user.beep()
+            user.wait_for_enter("Lift Bow")
+
+            robot.moveL(
+                hover_pose,
+                arm_config.speed,
+                arm_config.acceleration
+            )
+
+            if user.yes_no("\nEnough Rosin(y/n)? "):
+                break
+
+    elif bow in ("basic", "spiccato"):
+        # Move to Above String
+        if not at_violin_hover:
+            user.beep()
+            user.wait_for_enter("Move Above String")
+
+            robot.moveJ_safe(
+                cal["violin_hover_joints"],
+                arm_config.speed,
+                arm_config.acceleration,  
+                cal["violin_hover_position"]
+            )
+
+        force_offset = robot.zero_force_sensor()
+        robot.set_force_offset(force_offset)
+
+
+        if bow == "basic":
+            while True:
+                current_string = user.select_string()
+                if current_string is None:
+                    break
+
+                start_pos = user.select_start_position()
+                if start_pos is None:
+                    continue
+
+                if start_pos == "middle":
+                    start_dir = user.select_start_direction()
+                    if start_dir is None:
+                        continue
+                    break
+                break
+            if current_string is None:
+                continue
+
+
+            # Move onto String Position
+            user.beep()
+            user.wait_for_enter("Move Onto String")      
+
+            if start_pos == "middle":
+                middle_pose = robot.get_middle_pose(current_string)
+                middle_joints = robot.get_middle_joints(current_string)
+
+                robot.moveJ(
+                    middle_joints,
+                    arm_config.speed,
+                    arm_config.acceleration
+                )
+
+            else:
+                robot.moveJ(
+                    cal["joint_paths"][current_string][start_pos],
+                    arm_config.speed,
+                    arm_config.acceleration
+                )
+
+            task_frame = robot.generate_task_frame()
+
+            frog_pose = cal["string_paths"][current_string]["frog"]
+            tip_pose = cal["string_paths"][current_string]["tip"]
+
+            force_monitor = None
+
+            if not config.simulation and arm_config.useForce:
+                if config.monitorForce:
+                    force_monitor = robot.start_force_monitor(
+                        task_frame,
+                        frog_pose,
+                        tip_pose,
+                        interval = 0.05
+                    )
+
+                force_preparation_complete = not arm_config.useForce
+
+                while not force_preparation_complete:
+                    prepared = robot.prepare_force(
+                        task_frame = task_frame
+                    )
+
+                    if prepared:
+                        print("Force Prepared")
+                        force_preparation_complete = True
+                        break
+
+                    if force_monitor is not None:
+                        robot.pause_force_monitor(force_monitor)
+
+                    print("\nForce Preparation Failed")
+
+                    while True:
+                        choice = input(
+                            "\nForce Preparation Failed:\n"
+                            " [M] Move On Anyway\n"
+                            " [T] Try Again\n"
+                            " [E] Exit Program\n"
+                        ).strip().lower()
+
+                        if choice in {"m", "move"}:
+                            print("Moving On Without Successful Force Preparation")
+                            force_preparation_complete = True
+                            break
+
+                        if choice in {"t", "try"}:
+                            print("Trying Force Preparation Again")
+                            if force_monitor is not None:
+                                robot.resume_force_monitor(force_monitor)
+                            break
+
+                        if choice in {"e", "exit"}:
+                            print("Exiting Program")
+
+                            if force_monitor is not None:
+                                robot.stop_force_monitor(force_monitor)
+
+                            robot.forceModeStop()
+                            robot.stop()
+                            sys.exit()
+                        else:
+                            print("Invalid Input, Try Again")
+            
+                if force_monitor is not None:
+                    robot.pause_force_monitor(force_monitor)
+
             # Basic Bowing
             user.beep()
             user.wait_for_enter("Start Bowing")
@@ -279,11 +322,17 @@ while True:
             if force_monitor is not None:
                 robot.resume_force_monitor(force_monitor)
 
-
-            basic_cartesian_path, basic_joint_path = path.basic(
-                current_string,
-                start_pos
-            )
+            if start_pos == "middle":
+                basic_cartesian_path, basic_joint_path = path.basic(
+                    current_string,
+                    start_pos,
+                    start_dir
+                )
+            else:
+                basic_cartesian_path, basic_joint_path = path.basic(
+                    current_string,
+                    start_pos
+                )
 
             print("\n=== BASIC PATH DEBUG ===")
             print(f"Start Position: {start_pos}")
@@ -336,6 +385,9 @@ while True:
 
         elif bow == "spiccato":
             current_string = user.select_string()
+
+            if current_string is None:
+                continue
 
             # Move onto String Position
             user.beep()

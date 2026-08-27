@@ -8,10 +8,11 @@ import config
 
 # Program Parameters
 config.simulation = False   # True = RoboDK, False = Real UR7e
-config.setup = False       # True = Get Coordinates, False = Run Program
+config.setup = False      # True = Get Coordinates, False = Run Program
 config.keyboard = False
 config.beep = True
 config.monitorForce = True
+config.avoidObstacles = False
 
 import arm_control.arm_config as arm_config
 
