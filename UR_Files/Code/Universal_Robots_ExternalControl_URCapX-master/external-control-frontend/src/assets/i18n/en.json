@@ -1,0 +1,44 @@
+{
+  "program": {
+    "tree": {
+      "nodes": {
+        "universal-robots-external-control-external-control-program": "External Control Program"
+      }
+    }
+  },
+  "application": {
+    "nodes": {
+      "universal-robots-external-control-external-control-application": {
+        "title": "External Control",
+        "supportiveText": "Connect to ROS/ROS 2 driver and Universal Robots Client Library",
+        "description": {
+          "line1": "This URCap allows you to inject URScript code into a program from an external application upon request.",
+          "line2": "It is primarily meant for connecting the robot to the Universal Robots ROS or ROS 2 driver."
+        },
+        "settings": {
+          "header": "Settings",
+          "description": "Please enter the host name or IP address and port number of the remote application providing the injected URScript code."
+        },
+        "important": {
+          "header": "Important",
+          "line1": "The ROS or ROS 2 drivers needs the Primary client, Secondary client and Real-Time Data Exchange services to be enabled.",
+          "line2": "Ethernet/IP and Profinet fieldbusses have to be disabled for proper operation of the ROS or ROS 2 drivers.",
+          "line3": "The URScript is not fetched when playing the program. Use the 'update program' button in the program node to inject the URScript into the program, such that it is there when you press play."
+        },
+        "serviceHowToEnable": {
+          "text": "To enable or disabled the services, go to:",
+          "settings": "Settings",
+          "security": "Security",
+          "services": "Services"
+        }
+      }
+    }
+  },
+  "presenter": {
+    "port-input-description": "Enter port number",
+    "robotIP-input-description": "Enter computer host name or IP address",
+    "update-button": "Update program",
+    "update-label": "Update program from",
+    "cache-label": "Program cached from {{ip}}:{{port}}"
+  }
+}

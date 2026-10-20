@@ -1,0 +1,44 @@
+{
+  "program": {
+    "tree": {
+      "nodes": {
+        "universal-robots-external-control-external-control-program": "Ekstern Kontrol Program"
+      }
+    }
+  },
+  "application": {
+    "nodes": {
+      "universal-robots-external-control-external-control-application": {
+        "title": "Ekstern Kontrol",
+        "supportiveText": "Forbind til ROS/ROS 2 driver og Universal Robots Client Library",
+        "description": {
+          "line1": "Denne URCap tillader dig at indsætte URScript kode i et program fra en ekstern applikation efter anmodning.",
+          "line2": "Den er primært designet til at forbinde robotten med Universal ROS eller ROS 2 drivere."
+        },
+        "settings": {
+          "header": "Indstillinger",
+          "description": "Indtast værtsnavn eller IP-adressen og portnummeret på den computeren der køre ROS driven eller URScript koden."
+        },
+        "important": {
+          "header": "Vigtigt",
+          "line1": "ROS eller ROS 2 drivere kræver, at Primary client, Secondary client og Real-Time Data Exchange tjenester er aktiveret.",
+          "line2": "Ethernet/IP og Profinet feltbusser skal være deaktiveret for korrekt drift af ROS eller ROS 2 drivere.",
+          "line3": "URScriptet bliver ikke hentet, når programmet afspilles. Brug knappen 'update program' i program noden til at hente URScriptet, så det ligger i programmet, når programmet afspilles."
+        },
+        "serviceHowToEnable": {
+          "text": "For at aktivere eller deaktivere tjenesterne, gå til:",
+          "settings": "Indstillinger",
+          "security": "Sikkerhed",
+          "services": "Tjenester"
+        }
+      }
+    }
+  },
+  "presenter": {
+    "port-input-description": "Indtast portnummer",
+    "robotIP-input-description": "Indtast værtsnavn eller IP-adresse",
+    "update-button": "Opdater program",
+    "update-label": "Opater program fra",
+    "cache-label": "Program gemt fra {{ip}}:{{port}}"
+  }
+}

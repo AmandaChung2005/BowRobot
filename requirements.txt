@@ -1,0 +1,10 @@
+numpy==2.4.3
+ur_rtde==1.6.3
+nidaqmx==1.5.0
+pynput
+matplotlib==3.10.8
+robodk==6.0.1
+scipy==1.18.0
+PyYAML==6.0.3
+rich==15.0.0
+requests==2.34.2
