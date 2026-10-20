@@ -1,10 +1,25 @@
 import sys
 import time
-import winsound
 from pynput.keyboard import Key, Listener
 
 import config
 from . import robot_interface_new as robot
+from . import arm_config
+
+import math
+import os
+import shutil
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+import wave
+
+try:
+    import winsound
+except ImportError:
+    winsound = None
 
 halt = False
 selection = None
@@ -133,14 +148,22 @@ def select_start_direction():
 
 def select_bowing_type():
     while True:
-        bow = safe_input(
+        menu = (
             "\nBowing Type:\n"
             " [R] Rosin\n"
             " [B] Basic\n"
             " [S] Spiccato\n"
+        )
+
+        if arm_config.bow_loaded and not config.simulation:
+           menu += " [U] Unload Bow\n"
+
+        menu += (
             " [X] Back\n"
             "> "
-        ).strip().lower()
+        )
+
+        bow = safe_input(menu).strip().lower()
 
         if bow in ("b", "basic"):
             return "basic"
@@ -150,6 +173,9 @@ def select_bowing_type():
 
         if bow in ("s", "spiccato"):
             return "spiccato"
+
+        if bow in ("u", "unload") and arm_config.bow_loaded:
+            return "unload"
 
         if bow in ("x", "back"):
             return None
@@ -168,6 +194,86 @@ def yes_no(prompt):
 
         print("invalid input, try again")
 
+def play_tone(frequency, duration):
+    sample_rate = 44100
+    sample_count = int(sample_rate * duration / 1000)
+    fade_samples = max(1, int(sample_rate * 0.005))
+
+    with tempfile.NameTemporaryFile(
+        suffix = ".wav",
+        delete = False
+    ) as temp_file:
+        audio_path = temp_file.name
+
+    try:
+        samples = bytearray()
+
+        for i in range(sample_count):
+            envelope = min(
+                1.0,
+                i / fade_samples,
+                (sample_count - 1 - i) / fade_samples
+            )
+
+            value = int(
+                12000 * max(0.0, envelope) * math.sin(2* math.pi * frequency * i / sample_rate)
+            )
+
+            samples.extend(struct.pack("<h", value))
+
+        with wave.open(audio_path, "wb") as audio_file:
+            audio_file.setnchannels(1)
+            audio_file.setsampwidth(2)
+            audio_file.setframerate(sample_rate)
+            audio_file.writeframes(samples)
+
+        if sys.platform == "darwin":
+            players = [
+                ("afplay", [])
+            ]
+        elif sys.platform.startswith("linux"):
+            players = [
+                ("paplay", []),
+                ("aplay", ["-q"]),
+                ("ffplay", ["-nodisp", "--autoexit", "-loglevel", "quiet"]),
+                ("play", ["-q"])
+            ]
+        else:
+            players = []
+
+        for player, options in players:
+            executable = shutil.which(player)
+
+            if executable is None:
+                continue
+
+            try:
+                subprocess.run(
+                    [executable, *options, audio_path],
+                    check = True,
+                    stdout = subprocess. DEVNULL,
+                    stderr = subprocess.DEVNULL
+                )
+                return
+            except (OSError, subprocess.CalledProcessError):
+                continue
+
+        print("'Beep' Functionality is Not Compatible with This Operating System")
+        print("Turning 'Beep' Off")
+        config.beep = False
+    finally:
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+
 def beep():
-    if config.beep:
-        winsound.Beep(500, 200)
+    if not config.beep:
+        return
+    
+    frequency = 500
+    duration = 200
+
+    if winsound is not None:
+        winsound.Beep(frequency, duration)
+
+    else:
+        play_tone(frequency, duration)
