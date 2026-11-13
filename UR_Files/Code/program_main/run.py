@@ -10,6 +10,8 @@ import config
 config.simulation = False   # True = RoboDK, False = Real UR7e
 config.setup = False      # True = Get Coordinates, False = Run Program
 config.keyboard = False
+config.simple = True
+
 config.beep = True
 config.monitorForce = True
 config.avoidObstacles = False
@@ -25,6 +27,21 @@ arm_config.start_dir = "upbow"    # upbow, downbow
 arm_config.bowing_cycles = 3
 arm_config.rosin_cycles = 1
 
+# Manual Setting for Simple Program
+arm_config.tcp_x_offset_mm = 0.0
+arm_config.tcp_z_offset_mm = 0.0
+arm_config.stroke_pitch_deg = 0.0
+arm_config.stroke_length_mm = 500.0
+arm_config.approach_height_mm = 50.0
+arm_config.stroke_y_direction = -1.0
+arm_config.bow_speed = 0.02
+arm_config.bow_acceleration = 0.05
+arm_config.approach_speed = 0.01
+arm_config.approach_acceleration = 0.02
+
+
+
+# PID Settings for Main Program
 arm_config.manual_force_pid = {
     "speed_mm_s": 1.0,
     "tolerance": 0.1,
@@ -61,7 +78,13 @@ else:
     else:
         print("RTDE Connected: ", robot.isConnected())
     print("\nStarting Main Program")
-    import arm_control.main
+    if config.simple:
+        print("\nStarting Simple Bowing Program")
+        arm_config.useForce = False
+        import arm_control.main_simple
+    else:
+        print("\nStarting Main Program")
+        import arm_control.main
 
 
 

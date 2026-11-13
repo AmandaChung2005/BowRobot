@@ -2505,6 +2505,205 @@ def stop():
         )
 
 # Calculations
+def make_simple_bow_poses(
+    frog_pose,
+    stroke_length_mm,
+    stroke_y_direction,
+    x_offset_mm=0.0,
+    z_offset_mm=0.0,
+    pitch_deg=0.0
+):
+    frog_pose = np.asarray(
+        as_list(frog_pose),
+        dtype=float
+    ).flatten()
+
+    if frog_pose.shape != (6,):
+        raise ValueError("frog_pose must contain 6 values")
+
+    if not np.all(np.isfinite(frog_pose)):
+        raise ValueError("frog_pose contains non-finite values")
+
+    stroke_length_mm = float(stroke_length_mm)
+    stroke_y_direction = float(stroke_y_direction)
+    x_offset_mm = float(x_offset_mm)
+    z_offset_mm = float(z_offset_mm)
+    pitch_deg = float(pitch_deg)
+
+    if not np.isfinite(stroke_length_mm) or stroke_length_mm <= 0:
+        raise ValueError("stroke_length_mm must be positive and finite")
+
+    if stroke_y_direction not in (-1.0, 1.0):
+        raise ValueError("stroke_y_direction must be either -1.0 or 1.0")
+
+    if not np.all(np.isfinite([
+        x_offset_mm,
+        z_offset_mm,
+        pitch_deg
+    ])):
+        raise ValueError("Simple bow offsets and pitch must be finite")
+
+    # Convert the calibrated frog orientation from degrees to radians.
+    frog_rotation = Rotation.from_rotvec(
+        np.deg2rad(frog_pose[3:6])
+    )
+    rotation_matrix = frog_rotation.as_matrix()
+
+    def pose_at_stroke_fraction(fraction):
+        fraction = float(fraction)
+        local_x_mm = x_offset_mm
+        local_y_mm = (
+            stroke_y_direction
+            * stroke_length_mm
+            * fraction
+        )
+        local_z_mm = z_offset_mm * fraction
+        local_z_mm += (
+            stroke_y_direction
+            * stroke_length_mm
+            * fraction
+            * np.tan(np.deg2rad(pitch_deg))
+        )
+        local_position_mm = np.array(
+            [local_x_mm, local_y_mm, local_z_mm],
+            dtype=float
+        )
+        position_base_mm = (
+            frog_pose[:3]
+            + rotation_matrix @ local_position_mm
+        )
+
+        pose = frog_pose.copy()
+        pose[:3] = position_base_mm
+
+        # Keep the calibrated frog orientation for the entire path.
+        return pose.tolist()
+
+    return {
+        "frog": pose_at_stroke_fraction(0.0),
+        "middle": pose_at_stroke_fraction(0.5),
+        "tip": pose_at_stroke_fraction(1.0),
+    }
+
+def make_simple_bow_path(
+    bow_poses,
+    start_pos,
+    start_dir=None
+):
+    if not isinstance(bow_poses, dict):
+        raise TypeError("bow_poses must be the dictionary from "
+                        "make_simple_bow_poses()")
+
+    for name in ("frog", "middle", "tip"):
+        if name not in bow_poses:
+            raise KeyError(f"bow_poses is missing '{name}'")
+
+    frog_pose = bow_poses["frog"]
+    middle_pose = bow_poses["middle"]
+    tip_pose = bow_poses["tip"]
+
+    start_pos = str(start_pos).lower()
+
+    if start_pos == "frog":
+        return [frog_pose, tip_pose, frog_pose]
+
+    if start_pos == "tip":
+        return [tip_pose, frog_pose, tip_pose]
+
+    if start_pos == "middle":
+        start_dir = str(start_dir).lower()
+
+        if start_dir == "upbow":
+            return [
+                middle_pose,
+                frog_pose,
+                tip_pose,
+                middle_pose
+            ]
+
+        if start_dir == "downbow":
+            return [
+                middle_pose,
+                tip_pose,
+                frog_pose,
+                middle_pose
+            ]
+
+        raise ValueError(
+            "start_dir must be 'upbow' or 'downbow' when starting "
+            "from the middle"
+        )
+
+    raise ValueError("start_pos must be 'frog', 'middle', or 'tip'")
+
+def move_to_bow_start(
+    hover_pose,
+    start_pose,
+    approach_height_mm,
+    speed,
+    acceleration
+):
+    hover_pose = np.asarray(
+        as_list(hover_pose),
+        dtype=float
+    ).flatten()
+
+    start_pose = np.asarray(
+        as_list(start_pose),
+        dtype=float
+    ).flatten()
+
+    if hover_pose.shape != (6,) or start_pose.shape != (6,):
+        raise ValueError(
+            "hover_pose and start_pose must each contain 6 values"
+        )
+
+    if not np.all(np.isfinite(hover_pose)):
+        raise ValueError("hover_pose contains non-finite values")
+
+    if not np.all(np.isfinite(start_pose)):
+        raise ValueError("start_pose contains non-finite values")
+
+    approach_height_mm = float(approach_height_mm)
+
+    if not np.isfinite(approach_height_mm) or approach_height_mm <= 0:
+        raise ValueError(
+            "approach_height_mm must be positive and finite"
+        )
+
+    approach_pose = start_pose.copy()
+    approach_pose[2] += approach_height_mm
+
+    if hover_pose[2] <= approach_pose[2]:
+        raise ValueError(
+            "The calibrated hover Z must be above the approach-point Z. "
+            "Increase the hover height or reduce approach_height_mm."
+        )
+
+    travel_pose = start_pose.copy()
+    travel_pose[2] = hover_pose[2]
+
+    print(
+        "\nMoving to selected X/Y and bow orientation "
+        "at the existing hover height"
+    )
+    moveL(
+        travel_pose.tolist(),
+        speed,
+        acceleration
+    )
+
+    print("\nLowering vertically to the approach position")
+    moveL(
+        approach_pose.tolist(),
+        speed,
+        acceleration
+    )
+
+    return approach_pose.tolist()
+
+
+
 def solveIK(pose, reference = None):
     if config.simulation:
         pose = np.asarray(

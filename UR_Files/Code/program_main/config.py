@@ -2,6 +2,7 @@
 simulation = None
 setup = None
 keyboard = None
+simple = None
 beep = None
 monitorForce = None
 avoidObstacles = None
