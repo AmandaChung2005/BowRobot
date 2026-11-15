@@ -22,27 +22,34 @@ cal = arm_config.data
 user.start_interface()
 print("Simple Bowing Program Started")
 
-if not robot.is_remote_control():
-    print("\n" + "=" * 60)
-    print("Error: Polyscope Isn't in Remote Control Mode")
-    print("=" * 60)
-    print("\nPlease Switch Polyscope to Remote Control Mode")
-    print("Then Restart the Program")
-    print()
-    sys.exit()
+# Check to ensure that Polyscope is in Remote Mode. Not working
+# user.beep()
+# user.wait_for_enter(
+#     "Switch PolyScope to Remote Control mode, then press Enter"
+# )
+# print("Dashboard Remote Control status:", robot.is_remote_control())
+
+# if not robot.is_remote_control():
+#     print("\n" + "=" * 60)
+#     print("Error: Polyscope Isn't in Remote Control Mode")
+#     print("=" * 60)
+#     print("\nPlease Switch Polyscope to Remote Control Mode")
+#     print("Then Restart the Program")
+#     print()
+#     sys.exit()
 
 # Move to Home
-user.beep()
-user.wait_for_enter("Move to Home")
+# user.beep()
+# user.wait_for_enter("Move to Home")
 
-robot.moveJ_safe(
-    arm_config.home_joints,
-    arm_config.joint_speed,
-    arm_config.joint_acceleration,
-    arm_config.home_position
-)
+# robot.moveJ_safe(
+#     arm_config.home_joints,
+#     arm_config.joint_speed,
+#     arm_config.joint_acceleration,
+#     arm_config.home_position
+# )
 
-time.sleep(0.02)
+# time.sleep(0.02)
 
 at_violin_hover = False
 
@@ -79,7 +86,8 @@ while True:
             start_dir = user.select_start_direction()
             if start_dir is None:
                 continue
-            break
+
+        break
 
     if start_pos is None:
         continue
@@ -97,14 +105,41 @@ while True:
         )
         continue
 
+    if current_string not in arm_config.stroke_pitch_deg_by_string:
+        raise ValueError(
+            f"No stroke pitch configured for string {current_string}"
+        )
+
+    stroke_pitch_deg = arm_config.stroke_pitch_deg_by_string[current_string]
+
+    if current_string not in arm_config.tcp_z_offset_mm_by_string:
+        raise ValueError(
+            f"No TCP Z offset configured for string {current_string}"
+        )
+
+    tcp_z_offset_mm = (
+        arm_config.tcp_z_offset_mm_by_string[current_string]
+    )
+
     bow_poses = robot.make_simple_bow_poses(
         frog_pose=frog_pose,
         stroke_length_mm=arm_config.stroke_length_mm,
-        stroke_y_direction=arm_config.stroke_y_direction,
-        x_offset_mm=arm_config.tcp_x_offset_mm,
-        z_offset_mm=arm_config.tcp_z_offset_mm,
-        pitch_deg=arm_config.stroke_pitch_deg
+        stroke_direction=arm_config.stroke_direction,
+        tcp_y_offset_mm=arm_config.tcp_y_offset_mm,
+        z_offset_mm=tcp_z_offset_mm,
+        pitch_deg=stroke_pitch_deg
     )
+
+    print("\n=== DERIVED POSES ===")
+    for name in ("frog", "middle", "tip"):
+        print(f"{name}: {np.round(bow_poses[name][:3], 2)}")
+
+    derived_distance = float(np.linalg.norm(
+        np.asarray(bow_poses["tip"][:3], dtype=float)
+        - np.asarray(bow_poses["frog"][:3], dtype=float)
+    ))
+
+    print(f"Derived frog-to-tip distance: {derived_distance:.2f} mm")
 
     bow_path = robot.make_simple_bow_path(
         bow_poses=bow_poses,
@@ -121,8 +156,8 @@ while True:
     print(f"Stroke length: {arm_config.stroke_length_mm:.2f} mm")
     print(f"TCP-local Y direction: {arm_config.stroke_y_direction:+.0f}")
     print(f"TCP-local X offset: {arm_config.tcp_x_offset_mm:.2f} mm")
-    print(f"Tip TCP-local Z correction: {arm_config.tcp_z_offset_mm:.2f} mm")
-    print(f"Additional path pitch: {arm_config.stroke_pitch_deg:.2f} deg")
+    print(f"Tip TCP-local Z correction: {tcp_z_offset_mm:.2f} mm")
+    print(f"Additional path pitch: {stroke_pitch_deg:.2f} deg")
 
     print("\nPath poses (mm / degrees):")
     for index, pose in enumerate(bow_path):
@@ -151,9 +186,29 @@ while True:
 
     robot.moveL(
         bow_path[0],
-        arm_config.approach_speed,
-        arm_config.approach_acceleration
+        arm_config.simple_approach_speed,
+        arm_config.simple_approach_acceleration
     )
+
+    print("\n=== BOW SEGMENT DISTANCES ===")
+
+    for index in range(len(bow_path) - 1):
+        start_xyz = np.asarray(bow_path[index][:3], dtype=float)
+        end_xyz = np.asarray(bow_path[index + 1][:3], dtype=float)
+        distance_mm = float(np.linalg.norm(end_xyz - start_xyz))
+
+        print(
+            f"Segment {index + 1}: "
+            f"{distance_mm:.2f} mm | "
+            f"from {np.round(start_xyz, 2)} "
+            f"to {np.round(end_xyz, 2)}"
+        )
+
+        if distance_mm < 10.0:
+            raise RuntimeError(
+                f"Bow segment {index + 1} is only {distance_mm:.2f} mm. "
+                "The generated path is collapsed; no stroke will be started."
+            )
 
     user.beep()
     user.wait_for_enter("Start Bowing")
@@ -171,8 +226,8 @@ while True:
 
             robot.moveL(
                 bow_path[index],
-                arm_config.simple_bow_speed,
-                arm_config.simple_bow_acceleration
+                arm_config.bow_speed,
+                arm_config.bow_acceleration
             )
 
             print(f"Segment {index} complete")
@@ -181,7 +236,7 @@ while True:
     user.wait_for_enter("Lift Bow")
 
     robot.moveL(
-        approach_pose.tolist(),
+        approach_pose,
         arm_config.speed,
         arm_config.acceleration
     )

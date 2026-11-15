@@ -122,41 +122,53 @@ class LiveForcePlot:
             self.closed = True
 
 # URScript Communication
-def is_remote_control():
+def is_remote_control(timeout = 3.0):
     if config.simulation:
         return True
 
-    register = 11
+    dashboard_port = getattr(config, "dashboard_port", 29999)
 
-    send_urscript(
-        f"write_output_integer_register({register}, -1)",
-        wait = 0.0
-    )
+    try:
+        with socket.create_connection(
+            (config.host_ip, dashboard_port),
+            timeout=timeout
+        ) as sock:
+            sock.settimeout(timeout)
 
-    send_urscript(
-        f"write_output_integer_register("
-        f"{register},"
-        f"is_control_allowed()"
-        f")",
-        wait = 0.0
-    )
+            # The Dashboard Server sends a greeting on connection.
+            with sock.makefile(
+                "r",
+                encoding="utf-8",
+                newline="\n"
+            ) as dashboard:
+                greeting = dashboard.readline().strip()
 
-    start_time = time.time()
+                if not greeting:
+                    raise RuntimeError(
+                        "Dashboard Server returned no greeting"
+                    )
 
-    while time.time() - start_time < 2.0:
-        value = rtde_r.getOutputIntRegister(register)
+                # Ask the controller directly for Remote Control state.
+                sock.sendall(b"is in remote control\n")
+                response = dashboard.readline().strip().lower()
 
-        if value == 1:
+        if response == "true":
             return True
-        
-        if value == 0:
+
+        if response == "false":
             return False
 
-        time.sleep(0.01)
+        raise RuntimeError(
+            "Could not interpret Dashboard Server response to "
+            f"'is in remote control': {response!r}"
+        )
 
-    raise RuntimeError(
-        "Timed-Out While Checking Remote Control Status"
-    )
+    except (OSError, TimeoutError) as exc:
+        raise RuntimeError(
+            "Could not query the Dashboard Server at "
+            f"{config.host_ip}:{dashboard_port}. "
+            "Check network connectivity and Dashboard Server access."
+        ) from exc
 
 script_counter = 0
 
@@ -2508,8 +2520,9 @@ def stop():
 def make_simple_bow_poses(
     frog_pose,
     stroke_length_mm,
-    stroke_y_direction,
-    x_offset_mm=0.0,
+    stroke_axis = "x",
+    stroke_direction = -1.0,
+    tcp_y_offset_mm=0.0,
     z_offset_mm=0.0,
     pitch_deg=0.0
 ):
@@ -2525,64 +2538,93 @@ def make_simple_bow_poses(
         raise ValueError("frog_pose contains non-finite values")
 
     stroke_length_mm = float(stroke_length_mm)
-    stroke_y_direction = float(stroke_y_direction)
-    x_offset_mm = float(x_offset_mm)
+    stroke_direction = float(stroke_direction)
+    tcp_y_offset_mm = float(tcp_y_offset_mm)
     z_offset_mm = float(z_offset_mm)
     pitch_deg = float(pitch_deg)
+    stroke_axis = str(stroke_axis).lower()
+
+    if stroke_axis not in ("x", "y"):
+        raise ValueError("stroke_axis must be 'x' or 'y'")
 
     if not np.isfinite(stroke_length_mm) or stroke_length_mm <= 0:
         raise ValueError("stroke_length_mm must be positive and finite")
 
-    if stroke_y_direction not in (-1.0, 1.0):
-        raise ValueError("stroke_y_direction must be either -1.0 or 1.0")
+    if stroke_direction not in (-1.0, 1.0):
+        raise ValueError("stroke_direction must be either -1.0 or 1.0")
 
     if not np.all(np.isfinite([
-        x_offset_mm,
+        tcp_y_offset_mm,
         z_offset_mm,
         pitch_deg
     ])):
         raise ValueError("Simple bow offsets and pitch must be finite")
 
-    # Convert the calibrated frog orientation from degrees to radians.
-    frog_rotation = Rotation.from_rotvec(
+    rotation = Rotation.from_rotvec(
         np.deg2rad(frog_pose[3:6])
+    ).as_matrix()
+
+    local_stroke = np.zeros(3, dtype=float)
+
+    if stroke_axis == "x":
+        local_stroke[0] = stroke_direction * stroke_length_mm
+        local_stroke[1] = tcp_y_offset_mm
+    else:
+        local_stroke[0] = tcp_y_offset_mm
+        local_stroke[1] = stroke_direction * stroke_length_mm
+
+    local_stroke[2] = (
+        z_offset_mm
+        + stroke_direction
+        * stroke_length_mm
+        * np.tan(np.deg2rad(pitch_deg))
     )
-    rotation_matrix = frog_rotation.as_matrix()
 
-    def pose_at_stroke_fraction(fraction):
-        fraction = float(fraction)
-        local_x_mm = x_offset_mm
-        local_y_mm = (
-            stroke_y_direction
-            * stroke_length_mm
-            * fraction
-        )
-        local_z_mm = z_offset_mm * fraction
-        local_z_mm += (
-            stroke_y_direction
-            * stroke_length_mm
-            * fraction
-            * np.tan(np.deg2rad(pitch_deg))
-        )
-        local_position_mm = np.array(
-            [local_x_mm, local_y_mm, local_z_mm],
-            dtype=float
-        )
-        position_base_mm = (
-            frog_pose[:3]
-            + rotation_matrix @ local_position_mm
-        )
+    local_start_offset = np.array(
+        [0.0, tcp_y_offset_mm, 0.0],
+        dtype=float
+    )
 
-        pose = frog_pose.copy()
-        pose[:3] = position_base_mm
+    if stroke_axis == "y":
+        local_start_offset[1] = 0.0
 
-        # Keep the calibrated frog orientation for the entire path.
-        return pose.tolist()
+    frog_position = (
+        frog_pose[:3]
+        + rotation @ local_start_offset
+    )
+
+    middle_position = (
+        frog_position
+        + rotation @ (0.5 * local_stroke)
+    )
+
+    tip_position = (
+        frog_position
+        + rotation @ local_stroke
+    )
+
+    frog_target = frog_pose.copy()
+    middle_target = frog_pose.copy()
+    tip_target = frog_pose.copy()
+
+    frog_target[:3] = frog_position
+    middle_target[:3] = middle_position
+    tip_target[:3] = tip_position
+
+    actual_stroke_mm = float(
+        np.linalg.norm(tip_target[:3] - frog_target[:3])
+    )
+
+    if actual_stroke_mm < 1.0:
+        raise ValueError(
+            f"Derived stroke is only {actual_stroke_mm:.3f} mm. "
+            "Check stroke_length_mm and stroke_axis."
+        )
 
     return {
-        "frog": pose_at_stroke_fraction(0.0),
-        "middle": pose_at_stroke_fraction(0.5),
-        "tip": pose_at_stroke_fraction(1.0),
+        "frog": frog_target.tolist(),
+        "middle": middle_target.tolist(),
+        "tip": tip_target.tolist(),
     }
 
 def make_simple_bow_path(
@@ -2590,51 +2632,43 @@ def make_simple_bow_path(
     start_pos,
     start_dir=None
 ):
-    if not isinstance(bow_poses, dict):
-        raise TypeError("bow_poses must be the dictionary from "
-                        "make_simple_bow_poses()")
-
-    for name in ("frog", "middle", "tip"):
-        if name not in bow_poses:
-            raise KeyError(f"bow_poses is missing '{name}'")
-
-    frog_pose = bow_poses["frog"]
-    middle_pose = bow_poses["middle"]
-    tip_pose = bow_poses["tip"]
-
-    start_pos = str(start_pos).lower()
-
     if start_pos == "frog":
-        return [frog_pose, tip_pose, frog_pose]
+        return [
+            bow_poses["frog"],
+            bow_poses["tip"],
+            bow_poses["frog"],
+        ]
 
     if start_pos == "tip":
-        return [tip_pose, frog_pose, tip_pose]
+        return [
+            bow_poses["tip"],
+            bow_poses["frog"],
+            bow_poses["tip"],
+        ]
 
     if start_pos == "middle":
-        start_dir = str(start_dir).lower()
-
         if start_dir == "upbow":
             return [
-                middle_pose,
-                frog_pose,
-                tip_pose,
-                middle_pose
+                bow_poses["middle"],
+                bow_poses["frog"],
+                bow_poses["tip"],
+                bow_poses["middle"],
             ]
 
         if start_dir == "downbow":
             return [
-                middle_pose,
-                tip_pose,
-                frog_pose,
-                middle_pose
+                bow_poses["middle"],
+                bow_poses["tip"],
+                bow_poses["frog"],
+                bow_poses["middle"],
             ]
 
         raise ValueError(
-            "start_dir must be 'upbow' or 'downbow' when starting "
-            "from the middle"
+            "start_dir must be 'upbow' or 'downbow' when starting at middle"
         )
 
     raise ValueError("start_pos must be 'frog', 'middle', or 'tip'")
+
 
 def move_to_bow_start(
     hover_pose,

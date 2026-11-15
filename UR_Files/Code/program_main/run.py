@@ -8,7 +8,7 @@ import config
 
 # Program Parameters
 config.simulation = False   # True = RoboDK, False = Real UR7e
-config.setup = False      # True = Get Coordinates, False = Run Program
+config.setup = False         # True = Get Coordinates, False = Run Program
 config.keyboard = False
 config.simple = True
 
@@ -24,20 +24,33 @@ arm_config.current_string = "E"   # G, D, A, E
 arm_config.start_pos = "frog"     # frog, middle, tip
 arm_config.start_dir = "upbow"    # upbow, downbow
 
-arm_config.bowing_cycles = 3
+arm_config.bowing_cycles = 1
 arm_config.rosin_cycles = 1
 
 # Manual Setting for Simple Program
-arm_config.tcp_x_offset_mm = 0.0
-arm_config.tcp_z_offset_mm = 0.0
-arm_config.stroke_pitch_deg = 0.0
+arm_config.tcp_y_offset_mm = 0.0
+
+arm_config.tcp_z_offset_mm_by_string = {
+    "G": 0.0,
+    "D": 0.0,
+    "A": 2.0,
+    "E": 2.0,
+}
+arm_config.stroke_pitch_deg_by_string = {
+    "G": 0.0,
+    "D": 0.0,
+    "A": 2.0,
+    "E": 1.0,
+}
 arm_config.stroke_length_mm = 500.0
 arm_config.approach_height_mm = 50.0
-arm_config.stroke_y_direction = -1.0
-arm_config.bow_speed = 0.02
-arm_config.bow_acceleration = 0.05
-arm_config.approach_speed = 0.01
-arm_config.approach_acceleration = 0.02
+arm_config.stroke_axis = "x"
+arm_config.stroke_direction = 1.0
+arm_config.bow_speed = 0.1
+arm_config.bow_acceleration = 0.2
+arm_config.simple_approach_speed = 0.02
+arm_config.simple_approach_acceleration = 0.05
+
 
 
 

@@ -73,8 +73,8 @@ stroke_pitch_deg = 0.0
 stroke_length_mm = None
 stroke_y_direction = 0.0
 approach_height_mm = 0.0
-approach_speed = 0.0
-approach_acceleration = 0.0
+simple_approach_speed = 0.0
+simple_approach_acceleration = 0.0
 
 # Spiccato Parameters
 spiccato_offset = 100    # mm from frog
