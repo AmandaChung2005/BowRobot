@@ -181,56 +181,54 @@ while True:
         acceleration=arm_config.simple_approach_acceleration
     )
 
-    user.beep()
-    user.wait_for_enter("Move Onto String")
-
-    robot.moveL(
-        bow_path[0],
-        arm_config.simple_approach_speed,
-        arm_config.simple_approach_acceleration
-    )
-
-    print("\n=== BOW SEGMENT DISTANCES ===")
-
-    for index in range(len(bow_path) - 1):
-        start_xyz = np.asarray(bow_path[index][:3], dtype=float)
-        end_xyz = np.asarray(bow_path[index + 1][:3], dtype=float)
-        distance_mm = float(np.linalg.norm(end_xyz - start_xyz))
-
-        print(
-            f"Segment {index + 1}: "
-            f"{distance_mm:.2f} mm | "
-            f"from {np.round(start_xyz, 2)} "
-            f"to {np.round(end_xyz, 2)}"
+    if not config.simulation:
+        user.beep()
+        user.wait_for_enter(
+            "Keep the bow clear of the violin, then zero the force sensor"
         )
 
-        if distance_mm < 10.0:
-            raise RuntimeError(
-                f"Bow segment {index + 1} is only {distance_mm:.2f} mm. "
-                "The generated path is collapsed; no stroke will be started."
-            )
+        force_monitor = None
 
-    user.beep()
-    user.wait_for_enter("Start Bowing")
+        if not config.simulation:
+            force_offset = robot.zero_force_sensor()
+            robot.set_force_offset(force_offset)
+            force_monitor = robot.start_force_monitor()
+    try:
+        user.beep()
+        user.wait_for_enter("Move Onto String")
 
-    for cycle in range(arm_config.bowing_cycles):
-        user.check_halt()
-
-        print(
-            f"\n=== BOWING CYCLE "
-            f"{cycle + 1}/{arm_config.bowing_cycles} ==="
+        robot.moveL(
+            bow_path[0],
+            arm_config.simple_approach_speed,
+            arm_config.simple_approach_acceleration
         )
 
-        for index in range(1, len(bow_path)):
+        user.beep()
+        user.wait_for_enter("Start Bowing")
+
+        for cycle in range(arm_config.bowing_cycles):
             user.check_halt()
 
-            robot.moveL(
-                bow_path[index],
-                arm_config.bow_speed,
-                arm_config.bow_acceleration
+            print(
+                f"\n=== BOWING CYCLE "
+                f"{cycle + 1}/{arm_config.bowing_cycles} ==="
             )
 
-            print(f"Segment {index} complete")
+            for index in range(1, len(bow_path)):
+                user.check_halt()
+
+                robot.moveL(
+                    bow_path[index],
+                    arm_config.bow_speed,
+                    arm_config.bow_acceleration
+                )
+
+                print(f"Segment {index} complete")
+
+    finally:
+        if force_monitor is not None:
+            robot.stop_force_monitor(force_monitor)
+
 
     user.beep()
     user.wait_for_enter("Lift Bow")

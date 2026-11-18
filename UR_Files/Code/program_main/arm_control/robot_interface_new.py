@@ -8,6 +8,7 @@ import math
 import json
 import subprocess
 from pathlib import Path
+import queue
 
 import config
 import arm_control.arm_config as arm_config
@@ -32,7 +33,7 @@ else:
     from rtde_control import RTDEControlInterface
     from rtde_io import RTDEIOInterface
 
-    rtde_r = RTDEReceiveInterface(config.host_ip)
+    rtde_r = RTDEReceiveInterface(config.host_ip, float(config.rtde_freq))
     rtde_c = RTDEControlInterface(config.host_ip)
     rtde_io = RTDEIOInterface(config.host_ip)
     robot = None
@@ -53,8 +54,9 @@ def format_pose(values):
 class LiveForcePlot:
     def __init__(self, title="Live End-Effector Force"):
         viewer_path = (
-            Path(__file__).resolve().parent
-            / "force_plot_viewer.py"
+            Path(__file__).resolve().parent.parent
+            / "sensing"
+            / "force_viewer.py"
         )
 
         if not viewer_path.exists():
@@ -65,61 +67,83 @@ class LiveForcePlot:
         self.process = subprocess.Popen(
             [sys.executable, "-u", str(viewer_path)],
             stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
             text=True,
             encoding="utf-8",
             bufsize=1
         )
 
+        self.samples = queue.Queue()
         self.closed = False
-        self.lock = threading.Lock()
 
-        self.title = title
+        self.writer_thread = threading.Thread(
+            target = self._write_samples,
+            name = "force-plot-writer",
+            daemon = True
+        )
+        self.writer_thread.start()
 
-    def sample(self, time_s, force_xyz):
-        if self.closed or self.process.poll() is not None:
-            return
+        print(
+            f"Force graph viewer launched: {viewer_path}",
+            flush=True
+        )
 
-        force_xyz = np.asarray(force_xyz, dtype=float).flatten()
-
-        if force_xyz.size < 3 or not np.all(np.isfinite(force_xyz[:3])):
-            return
-
-        message = {
-            "type": "sample",
-            "time": float(time_s),
-            "fx": float(force_xyz[0]),
-            "fy": float(force_xyz[1]),
-            "fz": float(force_xyz[2]),
-        }
-
+    def _write_samples(self):
         try:
-            with self.lock:
-                if self.closed or self.process.poll() is not None:
-                    return
+            while True:
+                message = self.samples.get()
 
-                self.process.stdin.write(json.dumps(message) + "\n")
-                self.process.stdin.flush()
-        except (BrokenPipeError, OSError, ValueError):
-            self.closed = True
-
-    def finish(self):
-        if self.closed:
-            return
-
-        try:
-            with self.lock:
-                if self.process.poll() is None:
+                if message is None:
                     self.process.stdin.write(
                         json.dumps({"type": "finish"}) + "\n"
                     )
                     self.process.stdin.flush()
                     self.process.stdin.close()
-        except (BrokenPipeError, OSError, ValueError):
-            pass
-        finally:
-            self.closed = True
+                    return
+
+                if self.process.poll() is not None:
+                    return
+
+                self.process.stdin.write(json.dumps(message) + "\n")
+                self.process.stdin.flush()
+
+        except (BrokenPipeError, OSError, ValueError) as exc:
+            print(
+                f"Force viewer stopped receiving samples: {exc}",
+                flush=True
+            )
+
+    def sample(self, time_s, force_xyz, tcp_speed_m_s):
+        if self.closed or self.process.poll() is not None:
+            return
+
+        force_xyz = np.asarray(force_xyz, dtype=float).flatten()
+        tcp_speed_m_s = float(tcp_speed_m_s)
+
+        if force_xyz.size < 3 or not np.all(np.isfinite(force_xyz[:3])) or not np.isfinite(tcp_speed_m_s):
+            return
+
+        if not np.all(np.isfinite(force_xyz[:3])):
+            return
+
+        if not np.isfinite(tcp_speed_m_s):
+            return
+
+        self.samples.put({
+            "type": "sample",
+            "time": float(time_s),
+            "fx": float(force_xyz[0]),
+            "fy": float(force_xyz[1]),
+            "fz": float(force_xyz[2]),
+            "tcp_speed_m_s": tcp_speed_m_s,
+        })
+
+    def finish(self):
+        if self.closed:
+            return
+
+        self.closed = True
+        self.samples.put(None)
+        self.writer_thread.join(timeout=2.0)
 
 # URScript Communication
 def is_remote_control(timeout = 3.0):
@@ -284,153 +308,102 @@ def wait_pose(
         time.sleep(0.05)
     return False
 
-def start_force_monitor(
-    task_frame,
-    frog_pose,
-    tip_pose,
-    interval = 0.05,
-    show_graph = True
-):
+def start_force_monitor():
     if config.simulation:
+        print("Force Monitoring Unavailable in Simulation Mode")
         return None
 
-    if interval <= 0:
-        raise ValueError("Force Monitor Interval Must Be Positive")
+    sample_rate_hz = float(config.rtde_freq)
 
-    task_frame = np.asarray(
-        task_frame, 
-        dtype = float
-    ).flatten()
+    if sample_rate_hz <= 0:
+        raise ValueError("config.rtde_freq must be positive")
 
-    if task_frame.shape != (6,):
-        raise ValueError("task_frame Must Contain 6 Values")
+    sample_period = 1.0 / sample_rate_hz
 
     stop_event = threading.Event()
     pause_event = threading.Event()
+    live_plot = LiveForcePlot()
 
-    live_plot = None
-
-    if show_graph:
-        try:
-            live_plot = LiveForcePlot()
-        except Exception as exc:
-            print(f"Couldn't Start Live Force Graph : {exc}", flush = True)
-
-    task_rotation = Rotation.from_rotvec(
-        np.deg2rad(task_frame[3:6])
-    ).as_matrix()
-
-    task_z_axis_base = task_rotation[:, 2]
-    monitor_start_time = time.monotonic()
+    monitor_state = {
+        "sample_count": 0,
+        "start_time": None,
+        "error": None
+    }
 
     def monitor():
+        start_time = time.monotonic()
+        next_sample_time = start_time
+        monitor_state["start_time"] = start_time
+
         try:
             while not stop_event.is_set():
                 if pause_event.is_set():
-                    stop_event.wait(interval)
+                    stop_event.wait(0.01)
+                    next_sample_time = time.monotonic()
                     continue
 
-                try:
-                    tcp_pose = np.asarray(
-                        rtde_r.getActualTCPPose(),
-                        dtype = float
-                    ).flatten()
+                tcp_pose = np.asarray(
+                    rtde_r.getActualTCPPose(),
+                    dtype = float
+                ).flatten()
 
-                    raw_wrench = np.asarray(
-                        rtde_r.getActualTCPForce(),
-                        dtype = float
-                    ).flatten()
+                raw_force = np.asarray(
+                    rtde_r.getActualTCPForce(),
+                    dtype = float
+                ).flatten()
 
-                    tcp_speed = np.asarray(
-                        rtde_r.getActualTCPSpeed(),
-                        dtype = float
-                    ).flatten()
+                tcp_speed = np.asarray(
+                    rtde_r.getActualTCPSpeed(),
+                    dtype = float
+                ).flatten()
 
-                    if tcp_pose.size < 6 or raw_wrench.size < 3 or tcp_speed.size < 6:
-                        raise RuntimeError("Couldn't Read a Valid TCP Reading")
-
-                    corrected_wrench = raw_wrench - force_offset
-
-                    tcp_rotation = Rotation.from_rotvec(
-                        tcp_pose[3:6]
-                    ).as_matrix()
-
-                    force_tcp = tcp_rotation.T @ corrected_wrench[:3]
-                    
-                    raw_force_task = (
-                        task_rotation.T @ raw_wrench[:3]
+                if tcp_pose.size < 6 or raw_force.size < 3 or tcp_speed.size < 3:
+                    raise RuntimeError(
+                        "Could not read a valid TCP pose or force"
                     )
 
-                    corrected_force_task = (
-                        task_rotation.T @ corrected_wrench[:3]
-                    )
+                offset = np.asarray(
+                    get_force_offset(),
+                    dtype=float
+                ).flatten()
 
-                    offset_force_task = (
-                        task_rotation.T @ force_offset[:3]
-                    )
+                corrected_force = raw_force[:3] - force_offset[:3]
 
-                    raw_task_fz = float(raw_force_task[2])
-                    corrected_task_fz = float(
-                        corrected_force_task[2]
-                    )
-                    offset_task_fz = float(offset_force_task[2])
+                tcp_rotation = Rotation.from_rotvec(
+                    tcp_pose[3:6]
+                ).as_matrix()
 
-                    tcp_velocity_task = (
-                        task_rotation.T @ tcp_speed[:3]
-                    )
-                    task_vz = float(tcp_velocity_task[2])
+                force_tcp = tcp_rotation.T @ corrected_force
+                velocity_tcp = tcp_rotation.T @ tcp_speed[:3]
+                tcp_speed_m_s = float(
+                    np.linalg.norm(velocity_tcp)
+                )
 
-                    distance = distance_from_frog(
-                        frog_pose,
-                        tip_pose
-                    )
+                elapsed = time.monotonic() - start_time
 
-                    commanded_force = -float(np.clip(
-                        arm_config.bow_force
-                        + arm_config.force_constant * distance,
-                        0.0,
-                        arm_config.max_force
-                    ))
+                live_plot.sample(
+                    elapsed,
+                    force_tcp,
+                    tcp_speed_m_s
+                )
+                monitor_state["sample_count"] += 1
 
-                    elapsed = (
-                        time.monotonic() - monitor_start_time
-                    )
+                next_sample_time += sample_period
+                sleep_time = next_sample_time - time.monotonic()
 
-                    if live_plot is not None:
-                        live_plot.sample(
-                            elapsed,
-                            force_tcp
-                        )
+                if sleep_time > 0:
+                    stop_event.wait(sleep_time)
+                else:
+                    next_sample_time = time.monotonic()
 
-                    print(
-                        f"TCP Fxyz: "
-                        f"Fx {force_tcp[0]:+7.3f} N | "
-                        f"Fy {force_tcp[1]:+7.3f} N | "
-                        f"Fz {force_tcp[2]:+7.3f} N || "
-                        f"Cmd: {commanded_force:+7.3f} N | "
-                        f"Raw task Fz: {raw_task_fz:+7.3f} N | "
-                        f"Offset task Fz: {offset_task_fz:+7.3f} N | "
-                        f"Corrected task Fz: "
-                        f"{corrected_task_fz:+7.3f} N | "
-                        f"TCP Z: {tcp_pose[2]:+.4f} m | "
-                        f"Base VZ: {tcp_speed[2]:+.4f} m/s | "
-                        f"Task VZ: {task_vz:+.4f} m/s | "
-                        f"Distance: {distance:.4f} m",
-                        flush=True
-                    )
-
-                except Exception as exc:
-                    if not pause_event.is_set():
-                        print(
-                            f"Force monitor error: {exc}",
-                            flush=True
-                        )
-
-                stop_event.wait(interval)
+        except Exception as exc:
+            monitor_state["error"] = exc
+            print(
+                f"Force Monitor Stopped Due to Erro: {exc}"
+            )
 
         finally:
-            if live_plot is not None:
-                live_plot.finish()
+            live_plot.finish()
 
     thread = threading.Thread(
         target=monitor,
@@ -444,20 +417,30 @@ def start_force_monitor(
         "stop_event": stop_event,
         "pause_event": pause_event,
         "plot": live_plot,
+        "state": monitor_state,
+        "sample_rate_hz": sample_rate_hz
     }
 
+force_monitor_console_pause_event = threading.Event()
 
 def pause_force_monitor(force_monitor):
     if force_monitor is not None:
         force_monitor["pause_event"].set()
 
+def pause_force_monitor_console_output():
+    force_monitor_console_pause_event.set()
+
 def resume_force_monitor(force_monitor):
     if force_monitor is not None:
         force_monitor["pause_event"].clear()
 
+def resume_force_monitor_console_output():
+    force_monitor_console_pause_event.clear()
+
 def stop_force_monitor(force_monitor):
     if force_monitor is None:
         return
+    
     force_monitor["stop_event"].set()
     force_monitor["thread"].join(timeout = 2.0)
 
@@ -466,8 +449,22 @@ def stop_force_monitor(force_monitor):
             "Force Monitor Didn't Stop Within 2 Seconds",
             flush = True
         )
+        return
 
-    print()
+    state = force_monitor["state"]
+    start_time = state["start_time"]
+
+    if start_time is not None:
+        duration = max(time.monotonic() - start_time, 1e-9)
+        actual_rate = state["sample_count"] / duration
+
+        print(
+            f"Force recording complete: "
+            f"{state['sample_count']} samples, "
+            f"{actual_rate:.1f} samples/s "
+            f"(requested {force_monitor['sample_rate_hz']:.1f} Hz)",
+            flush=True
+        )
     
 def zero_force_sensor():
     if config.simulation:

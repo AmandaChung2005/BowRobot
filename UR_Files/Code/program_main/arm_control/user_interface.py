@@ -53,28 +53,36 @@ def check_halt():
 def wait_for_enter(message):
     global selection
 
-    selection = None
+    robot.pause_force_monitor_console_output()
 
-    print()
-    print(message)
-    print("Press Enter to continue")
-    print("Press Delete to stop")
+    try:
 
-    while selection != "enter":
-        check_halt()
-        time.sleep(0.01)
+        selection = None
 
-    selection = None
+        print()
+        print(message)
+        print("Press Enter to continue")
+        print("Press Delete to stop")
+
+        while selection != "enter":
+            check_halt()
+            time.sleep(0.01)
+
+        selection = None
+    finally:
+        robot.resume_force_monitor_console_output()
 
 def safe_input(prompt):
     global using_input
 
+    robot.pause_force_monitor_console_output()
     using_input = True
 
     try:
         answer = input(prompt)
     finally: 
         using_input = False
+        robot.resume_force_monitor_console_output()
 
     check_halt()
 

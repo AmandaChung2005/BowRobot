@@ -1,97 +1,145 @@
+"""Fresh, live plot of TCP-frame forces and TCP linear speed."""
+
 import csv
 import json
 import queue
 import sys
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
+
 import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-window_seconds = 30.0
 
-class ForcePlotViewer:
+class ForceViewer:
     def __init__(self, root):
         self.root = root
-        self.root.title("Live End-Effector Force")
-        self.root.geometry("950x620")
-        self.root.minsize(700, 450)
+        self.root.title("Force and TCP Speed - Current Run")
+        self.root.geometry("1000x700")
+        self.root.minsize(720, 500)
 
-        self.messages = queue. Queue()
+        self.messages = queue.Queue()
         self.times = []
-        self.fx = []
-        self.fy = []
-        self.fz = []
+        self.data = {
+            "Fx": [],
+            "Fy": [],
+            "Fz": [],
+            "TCP speed": [],
+        }
         self.finished = False
         self.closed = False
 
+        self.visible = {
+            name: tk.BooleanVar(value=True)
+            for name in self.data
+        }
+
         self._build_ui()
 
-        self.reader_thread = threading.Thread(
-            target = self._read_stdin,
-            daemon = True
-        )
+        threading.Thread(
+            target=self._read_input,
+            daemon=True
+        ).start()
 
-        self.read_thread.start()
-
-        self.root.protocol("WM_DELETE_WINDOW", self._discard_and_close)
+        self.root.protocol("WM_DELETE_WINDOW", self._discard)
         self.root.after(50, self._poll_messages)
-    def _build_ui(self):
-        plot_frame = ttk.Frame(self.root, padding = 8)
-        plot_frame.pack(fill = tk.BOTH, expand = True)
 
-        self.figure = Figure(figsize = (9, 5), dpi = 100)
+    def _build_ui(self):
+        toggle_frame = ttk.LabelFrame(
+            self.root,
+            text="Visible lines",
+            padding=8
+        )
+        toggle_frame.pack(fill=tk.X, padx=8, pady=(8, 4))
+
+        for name in self.data:
+            ttk.Checkbutton(
+                toggle_frame,
+                text=name,
+                variable=self.visible[name],
+                command=self._redraw
+            ).pack(side=tk.LEFT, padx=(0, 16))
+
+        self.figure = Figure(figsize=(9, 6), dpi=100)
         self.axes = self.figure.add_subplot(111)
 
-        self.axes.set_title("Force Measured at End Effector")
+        self.axes.set_title(
+            "Measured force and TCP linear speed"
+        )
         self.axes.set_xlabel("Time (s)")
-        self.axes.set_ylable("Force (N)")
-        self.axes.grid(True, alpha = 0.3)
+        self.axes.set_ylabel("Force (N) / speed (m/s)")
+        self.axes.grid(True, alpha=0.3)
 
-        self.line_x = self.axes.plot([], [], label = "Fx")
-        self.line_y = self.axes.plot([], [], label = "Fy")
-        self.line_z = self.axes.plot([], [], label = "Fz")
-        self.axes.legend(loc = "upper right")
+        colors = {
+            "Fx": "tab:blue",
+            "Fy": "tab:orange",
+            "Fz": "tab:green",
+            "TCP speed": "tab:red",
+        }
 
-        self.canvas = FigureCanvasTkAgg(self.figure, master = plot_frame)
-        self.canvas.get_tk_eidget().pack(fill = tk.BOTH, expand = True)
+        self.lines = {
+            name: self.axes.plot(
+                [],
+                [],
+                label=name,
+                color=colors[name],
+                linestyle="--" if name == "TCP speed" else "-"
+            )[0]
+            for name in self.data
+        }
 
-        controls = ttk.Frame(self.root, padding = (8, 0, 8, 8))
-        controls.pack(fill = tk.X)
+        self.axes.legend(loc="upper right")
 
-        self.status_label = ttk.Label(
-            controls,
-            text = "Recording force data..."
+        self.canvas = FigureCanvasTkAgg(
+            self.figure,
+            master=self.root
         )
-        self.status_label.pack(side = tk.LEFT)
-
-        self.save_button = ttk.Button(
-            controls,
-            text = "Save Graph",
-            command = self._save,
-            state = tk.DISABLED
+        self.canvas.get_tk_widget().pack(
+            fill=tk.BOTH,
+            expand=True,
+            padx=8,
+            pady=4
         )
-
-        self.save_button.pack(side = tk.RIGHT, padx = (8, 0))
-
-        self.discard_button = ttk.Button(
-            controls,
-            text = "Don't Save",
-            command = self._discard_and_close,
-            state = tk.DISABLED
-        )
-        self.discard_button.pack(side = tk.RIGHT)
 
         self.readout = ttk.Label(
-            plot_frame,
-            text="Fx: -- N    Fy: -- N    Fz: -- N",
+            self.root,
+            text=(
+                "Fx: -- N    Fy: -- N    Fz: -- N    "
+                "TCP speed: -- m/s"
+            ),
             font=("Segoe UI", 12, "bold")
         )
-        self.readout.pack(anchor=tk.W, pady=(6, 0))
+        self.readout.pack(anchor=tk.W, padx=10, pady=4)
 
-    def _read_stdin(self):
+        self.status = ttk.Label(
+            self.root,
+            text="Recording this run..."
+        )
+        self.status.pack(anchor=tk.W, padx=10, pady=(0, 4))
+
+        buttons = ttk.Frame(self.root, padding=8)
+        buttons.pack(fill=tk.X)
+
+        self.save_button = ttk.Button(
+            buttons,
+            text="Save Graph and CSV",
+            command=self._save,
+            state=tk.DISABLED
+        )
+        self.save_button.pack(side=tk.RIGHT, padx=(8, 0))
+
+        self.discard_button = ttk.Button(
+            buttons,
+            text="Don't Save",
+            command=self._discard,
+            state=tk.DISABLED
+        )
+        self.discard_button.pack(side=tk.RIGHT)
+
+    def _read_input(self):
         try:
             for line in sys.stdin:
                 try:
@@ -104,7 +152,7 @@ class ForcePlotViewer:
                 if message.get("type") == "finish":
                     return
         finally:
-            self.messages.put({"type": "eof"})
+            self.messages.put({"type": "finished"})
 
     def _poll_messages(self):
         if self.closed:
@@ -118,112 +166,117 @@ class ForcePlotViewer:
             except queue.Empty:
                 break
 
-            message_type = message.get("type")
-
-            if message_type == "sample":
+            if message.get("type") == "sample":
                 try:
-                    sample_time = float(message["time"])
-                    fx = float(message["fx"])
-                    fy = float(message["fy"])
-                    fz = float(message["fz"])
+                    values = {
+                        "time": float(message["time"]),
+                        "Fx": float(message["fx"]),
+                        "Fy": float(message["fy"]),
+                        "Fz": float(message["fz"]),
+                        "TCP speed": float(message["tcp_speed_m_s"]),
+                    }
                 except (KeyError, TypeError, ValueError):
                     continue
 
-                if not np.all(np.isfinite([sample_time, fx, fy, fz])):
+                if not np.all(np.isfinite(list(values.values()))):
                     continue
 
-                self.times.append(sample_time)
-                self.fx.append(fx)
-                self.fy.append(fy)
-                self.fz.append(fz)
+                self.times.append(values["time"])
+
+                for name in self.data:
+                    self.data[name].append(values[name])
+
                 got_samples = True
 
-            elif message_type in ("finish", "eof"):
-                self._mark_finished()
+            elif message.get("type") == "finished":
+                self._finish()
 
         if got_samples:
             self._redraw()
 
         self.root.after(50, self._poll_messages)
 
+    @staticmethod
+    def _limits(values):
+        values = np.asarray(values, dtype=float)
+
+        if values.size == 0:
+            return -1.0, 1.0
+
+        low = float(np.min(values))
+        high = float(np.max(values))
+
+        if high == low:
+            padding = max(0.1, abs(low) * 0.1)
+        else:
+            padding = max(0.1, (high - low) * 0.08)
+
+        return low - padding, high + padding
+
     def _redraw(self):
         if not self.times:
             return
 
-        times = np.asarray(self.times)
-        fx = np.asarray(self.fx)
-        fy = np.asarray(self.fy)
-        fz = np.asarray(self.fz)
+        times = np.asarray(self.times, dtype=float)
 
-        latest_time = times[-1]
-        visible_start = max(0.0, latest_time - window_seconds)
-        visible = times >= visible_start
+        for name in self.data:
+            self.lines[name].set_data(times, self.data[name])
+            self.lines[name].set_visible(self.visible[name].get())
 
-        visible_times = times[visible]
-        visible_fx = fx[visible]
-        visible_fy = fy[visible]
-        visible_fz = fz[visible]
+        # Show every sample from this run; no rolling window or trimming.
+        x_start = float(times[0])
+        x_end = float(times[-1])
 
-        self.line_x.set_data(visible_times, visible_fx)
-        self.line_y.set_data(visible_times, visible_fy)
-        self.line_z.set_data(visible_times, visible_fz)
+        if x_end <= x_start:
+            x_end = x_start + 1.0
 
-        right = max(window_seconds, latest_time)
-        left = max(0.0, right - window_seconds)
-        self.axes.set_xlim(left, right)
+        self.axes.set_xlim(x_start, x_end)
 
-        visible_forces = np.concatenate(
-            [visible_fx, visible_fy, visible_fz]
-        )
+        visible_values = []
 
-        if visible_forces.size:
-            minimum = float(np.min(visible_forces))
-            maximum = float(np.max(visible_forces))
-            padding = max(0.25, 0.1 * (maximum - minimum))
+        for name in self.data:
+            if self.visible[name].get():
+                visible_values.extend(self.data[name])
 
-            if maximum - minimum < 1e-9:
-                minimum -= 0.5
-                maximum += 0.5
-            else:
-                minimum -= padding
-                maximum += padding
-
-            self.axes.set_ylim(minimum, maximum)
-
-        self.canvas.draw_idle()
+        if visible_values:
+            self.axes.set_ylim(self._limits(visible_values))
 
         self.readout.configure(
             text=(
-                f"Latest TCP-frame force  |  "
-                f"Fx: {self.fx[-1]:+.3f} N    "
-                f"Fy: {self.fy[-1]:+.3f} N    "
-                f"Fz: {self.fz[-1]:+.3f} N"
+                f"Latest | "
+                f"Fx: {self.data['Fx'][-1]:+.3f} N    "
+                f"Fy: {self.data['Fy'][-1]:+.3f} N    "
+                f"Fz: {self.data['Fz'][-1]:+.3f} N    "
+                f"TCP speed: {self.data['TCP speed'][-1]:.4f} m/s"
             )
         )
 
-    def _mark_finished(self):
+        self.canvas.draw_idle()
+
+    def _finish(self):
         if self.finished:
             return
 
         self.finished = True
-        self.status_label.configure(
-            text=f"Recording complete: {len(self.times)} samples"
+        self.status.configure(
+            text=f"Run complete: {len(self.times)} samples collected"
         )
         self.save_button.configure(state=tk.NORMAL)
         self.discard_button.configure(state=tk.NORMAL)
+        self._redraw()
 
     def _save(self):
         if not self.times:
             messagebox.showinfo(
                 "No data",
-                "No force samples were recorded."
+                "No samples were received."
             )
-            self._discard_and_close()
+            self._discard()
             return
 
         filename = filedialog.asksaveasfilename(
             parent=self.root,
-            title="Save force graph",
+            title="Save force and speed graph",
             defaultextension=".png",
             filetypes=[("PNG image", "*.png")]
         )
@@ -245,30 +298,39 @@ class ForcePlotViewer:
                 "w",
                 newline="",
                 encoding="utf-8"
-            ) as csv_file:
-                writer = csv.writer(csv_file)
-                writer.writerow(
-                    ["time_s", "Fx_N", "Fy_N", "Fz_N"]
-                )
-                writer.writerows(
-                    zip(self.times, self.fx, self.fy, self.fz)
-                )
+            ) as output_file:
+                writer = csv.writer(output_file)
+                writer.writerow([
+                    "time_s",
+                    "Fx_N",
+                    "Fy_N",
+                    "Fz_N",
+                    "tcp_speed_m_s",
+                ])
+
+                writer.writerows(zip(
+                    self.times,
+                    self.data["Fx"],
+                    self.data["Fy"],
+                    self.data["Fz"],
+                    self.data["TCP speed"]
+                ))
 
         except OSError as exc:
             messagebox.showerror(
                 "Save failed",
-                f"Could not save the graph or data:\n{exc}"
+                f"Could not save graph or data:\n{exc}"
             )
             return
 
         messagebox.showinfo(
             "Saved",
             f"Graph saved to:\n{png_path}\n\n"
-            f"Force data saved to:\n{csv_path}"
+            f"All samples saved to:\n{csv_path}"
         )
-        self._discard_and_close()
+        self._discard()
 
-    def _discard_and_close(self):
+    def _discard(self):
         if self.closed:
             return
 
@@ -278,7 +340,7 @@ class ForcePlotViewer:
 
 def main():
     root = tk.Tk()
-    ForcePlotViewer(root)
+    ForceViewer(root)
     root.mainloop()
 
 

@@ -27,6 +27,8 @@ arm_config.start_dir = "upbow"    # upbow, downbow
 arm_config.bowing_cycles = 1
 arm_config.rosin_cycles = 1
 
+config.rtde_freq = 500.0
+
 # Manual Setting for Simple Program
 arm_config.tcp_y_offset_mm = 0.0
 
